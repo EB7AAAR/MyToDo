@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
+             x:Class="MyToDo.Views.AddTaskView"
+             Title="Add Task">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20"
+                             Spacing="10">
+            <Label Text="Title:" />
+            <Entry Text="{Binding Title}" />
+
+            <Label Text="Description:" />
+            <Editor Text="{Binding Description}"
+                    AutoSize="TextChanges" />
+
+            <Label Text="Due Date:" />
+            <DatePicker Date="{Binding DueDate}" />
+
+            <Label Text="Priority:" />
+            <Picker SelectedItem="{Binding Priority}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>High</x:String>
+                        <x:String>Medium</x:String>
+                        <x:String>Low</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Category:" />
+            <Entry Text="{Binding Category}" />
+
+            <Label Text="Recurrence Type:" />
+            <Picker SelectedItem="{Binding RecurrenceType}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>None</x:String>
+                        <x:String>Daily</x:String>
+                        <x:String>Weekly</x:String>
+                        <x:String>Monthly</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Recurrence Interval:" />
+            <Entry Text="{Binding RecurrenceInterval, Converter={StaticResource StringToIntConverter}}"
+                   Keyboard="Numeric" />
+
+            <Button Text="Save"
+                    Command="{Binding SaveTaskCommand}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

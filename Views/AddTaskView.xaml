@@ -3,14 +3,14 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
              xmlns:converters="clr-namespace:MyToDo.Converters"
+             xmlns:model="clr-namespace:MyToDo.Models"
              x:Class="MyToDo.Views.AddTaskView"
              Title="Add Task">
 
     <ScrollView>
         <VerticalStackLayout Padding="20"
                              Spacing="10">
-            <Label Text="Title:" />
-            <Entry Text="{Binding Title}" />
+            <!-- REMOVED: Title Entry -->
 
             <Label Text="Description:" />
             <Editor Text="{Binding Description}"
@@ -31,7 +31,18 @@
             </Picker>
 
             <Label Text="Category:" />
-            <Entry Text="{Binding Category}" />
+            <!--<Picker ItemsSource="{Binding Categories}"
+                    SelectedItem="{Binding Category}" />-->
+            <Picker SelectedItem="{Binding Category}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>1st Circle Visits</x:String>
+                        <x:String>2nd Circle Visits</x:String>
+                        <x:String>Health</x:String>
+                        <x:String>Work</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
 
             <Label Text="Recurrence Type:" />
             <Picker SelectedItem="{Binding RecurrenceType}">
@@ -48,6 +59,28 @@
             <Label Text="Recurrence Interval:" />
             <Entry Text="{Binding RecurrenceInterval, Converter={StaticResource StringToIntConverter}}"
                    Keyboard="Numeric" />
+
+            <!-- Subtasks Section -->
+            <Label Text="Subtasks:" />
+            <CollectionView ItemsSource="{Binding Subtasks}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:Subtask">
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <CheckBox IsChecked="{Binding IsCompleted}" />
+                            <Entry Grid.Column="1"
+                                   Text="{Binding Description}"
+                                   Placeholder="Subtask description" />
+                            <Button Grid.Column="2"
+                                    Text="-"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:AddTaskViewModel}}, Path=RemoveSubtaskCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+            <Button Text="+"
+                    Command="{Binding AddSubtaskCommand}" />
+
 
             <Button Text="Save"
                     Command="{Binding SaveTaskCommand}" />

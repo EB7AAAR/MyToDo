@@ -15,17 +15,21 @@ namespace MyToDo.ViewModels
         private ObservableCollection<TaskModel> _tasks = new();
 
         private readonly DatabaseContext _databaseContext;
+        private bool _isLoaded = false; // Flag to prevent initial double loading
 
         public HomeViewModel(DatabaseContext databaseContext)
         {
             _databaseContext = databaseContext;
-            // Data loading is handled in TaskListView.OnAppearing
         }
 
+        // Call this method to refresh the task list.
         public async Task LoadTasksAsync()
         {
+            if (_isLoaded) return; // Prevent double loading ON STARTUP
+
             Debug.WriteLine("---> LoadTasksAsync called");
 
+            _isLoaded = true; // Set the flag - but ONLY on initial load
             Tasks.Clear();
             var loadedTasks = await _databaseContext.GetAllTasksAsync();
 
@@ -33,15 +37,20 @@ namespace MyToDo.ViewModels
 
             foreach (var task in loadedTasks)
             {
-                Debug.WriteLine($"---> Task: {task.Title}, Due: {task.DueDate}");
+                Debug.WriteLine($"---> Task: {task.Description}, Due: {task.DueDate}"); // Show Description
                 Tasks.Add(task);
             }
+        }
+
+        // IMPORTANT: Add this method to reset the flag
+        public void ResetIsLoaded()
+        {
+            _isLoaded = false;
         }
 
         [RelayCommand]
         private async Task AddTask()
         {
-            // Create a new AddTaskViewModel with just the database context
             var addTaskViewModel = new AddTaskViewModel(_databaseContext);
             await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
             {
@@ -49,12 +58,11 @@ namespace MyToDo.ViewModels
             });
         }
 
-        [RelayCommand] // Add this for Edit functionality
+        [RelayCommand]
         private async Task GoToEditTask(TaskModel task)
         {
             if (task == null) return;
 
-            // Create a new AddTaskViewModel, passing BOTH the database context AND the task to edit
             var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
             await Shell.Current.GoToAsync($"{nameof(AddTaskView)}?id={task.Id}",
                new Dictionary<string, object>

@@ -9,6 +9,7 @@
             <!-- Register the converter -->
             <converters:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
             <converters:StringToBoolConverter x:Key="StringToBoolConverter" />
+            <converters:StringToIntConverter x:Key="StringToIntConverter" />
             <!-- Other resources -->
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="Resources/Styles/Colors.xaml" />

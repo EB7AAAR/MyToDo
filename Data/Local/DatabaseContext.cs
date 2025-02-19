@@ -2,6 +2,8 @@
 using SQLite;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Diagnostics;
+using System; // Ensure this is included
 
 namespace MyToDo.Data.Local
 {
@@ -17,22 +19,54 @@ namespace MyToDo.Data.Local
 
         public async Task<List<TaskModel>> GetAllTasksAsync()
         {
-            return await _database.Table<TaskModel>().ToListAsync();
+            try
+            {
+                return await _database.Table<TaskModel>().ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in GetAllTasksAsync: {ex}");
+                throw; // Re-throw the exception
+            }
         }
 
         public async Task<int> AddTaskAsync(TaskModel task)
         {
-            return await _database.InsertAsync(task);
+            try
+            {
+                return await _database.InsertAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in AddTaskAsync: {ex}");
+                throw; // Re-throw the exception
+            }
         }
 
         public async Task<int> UpdateTaskAsync(TaskModel task)
         {
-            return await _database.UpdateAsync(task);
+            try
+            {
+                return await _database.UpdateAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in UpdateTaskAsync: {ex}");
+                throw; // Re-throw the exception
+            }
         }
 
         public async Task<int> DeleteTaskAsync(TaskModel task)
         {
-            return await _database.DeleteAsync(task);
+            try
+            {
+                return await _database.DeleteAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in DeleteTaskAsync: {ex}");
+                throw; // Re-throw the exception
+            }
         }
     }
 }

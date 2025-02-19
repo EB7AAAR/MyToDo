@@ -33,3 +33,5 @@ https://github.com/EB7AAAR/MyToDo/blob/master/Views/AddTaskView.xaml.cs
 https://github.com/EB7AAAR/MyToDo/blob/master/Views/TaskListView.xaml
 
 https://github.com/EB7AAAR/MyToDo/blob/master/Views/TaskListView.xaml.cs
+https://github.com/EB7AAAR/MyToDo/blob/master/Converters/StringToBoolConverter.cs
+https://github.com/EB7AAAR/MyToDo/blob/master/Converters/BoolToOpacityConverter.cs

@@ -1,0 +1,918 @@
+﻿using MyToDo.Views;
+
+namespace MyToDo;
+
+public partial class App : Application
+{
+    public App(TaskListView taskListView)
+    {
+        InitializeComponent();
+        MainPage = new AppShell();
+    }
+}
+===========
+
+using MyToDo.Views;
+
+namespace MyToDo;
+
+public partial class AppShell : Shell
+{
+    public AppShell()
+    {
+        InitializeComponent();
+        Routing.RegisterRoute(nameof(AddTaskView), typeof(AddTaskView));
+    }
+}
+===========
+
+using CommunityToolkit.Maui;
+using Microsoft.Extensions.Logging;
+using MyToDo.Data.Local;
+using MyToDo.ViewModels;
+using MyToDo.Views;
+
+namespace MyToDo;
+
+public static class MauiProgram
+{
+    public static MauiApp CreateMauiApp()
+    {
+        var builder = MauiApp.CreateBuilder();
+        builder
+            .UseMauiApp<App>()
+            .UseMauiCommunityToolkit()
+            .ConfigureFonts(fonts =>
+            {
+                fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
+                fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+            });
+
+        // Register DatabaseContext
+        string dbPath = Path.Combine(FileSystem.AppDataDirectory, "tasks.db3");
+        builder.Services.AddSingleton(new DatabaseContext(dbPath));
+
+        // Register ViewModels and Views
+        builder.Services.AddSingleton<HomeViewModel>();
+        builder.Services.AddSingleton<TaskListView>();
+        builder.Services.AddTransient<AddTaskViewModel>();
+        builder.Services.AddTransient<AddTaskView>();
+
+#if DEBUG
+        builder.Logging.AddDebug();
+#endif
+
+        return builder.Build();
+    }
+}
+
+===========
+
+<?xml version = "1.0" encoding = "UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
+             xmlns:local="clr-namespace:MyToDo"
+             x:Class="MyToDo.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- Register the converter -->
+            <converters:BoolToOpacityConverter x:Key="BoolToOpacityConverter" />
+            <converters:StringToBoolConverter x:Key="StringToBoolConverter" />
+            <converters:StringToIntConverter x:Key="StringToIntConverter" />
+            <!-- Other resources -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Resources/Styles/Colors.xaml" />
+                <ResourceDictionary Source="Resources/Styles/Styles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>
+===========
+
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell x:Class="MyToDo.AppShell"
+       xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+       xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+       xmlns:local="clr-namespace:MyToDo.Views"
+       Shell.FlyoutBehavior="Disabled"
+       Title="MyToDo">
+
+    <ShellContent Title="Home"
+                  ContentTemplate="{DataTemplate local:TaskListView}"
+                  Route="MainPage" />
+
+</Shell>
+===========
+
+// Converters/BoolToOpacityConverter.cs
+using System;
+using System.Globalization;
+using Microsoft.Maui.Controls;
+
+namespace MyToDo.Converters
+{
+    public class BoolToOpacityConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            return (bool)value ? 0.5 : 1.0;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            throw new NotImplementedException();
+        }
+    }
+}
+===========
+
+// Converters/StringToBoolConverter.cs
+using System.Globalization;
+using Microsoft.Maui.Controls;
+
+namespace MyToDo.Converters;
+
+public class StringToBoolConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string stringValue && parameter is string parameterString)
+        {
+            return stringValue != parameterString;
+        }
+        return true;
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException();
+    }
+}
+
+===========
+
+// Converters/StringToBoolConverter.cs
+using System.Globalization;
+
+namespace MyToDo.Converters;
+
+public class StringToIntConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is int intValue)
+        {
+            return intValue.ToString();
+        }
+        return "0"; // Default value
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is string stringValue && int.TryParse(stringValue, out int intValue))
+        {
+            return intValue;
+        }
+        return 0; // Default value if parsing fails
+    }
+}
+===========
+
+using MyToDo.Models;
+using SQLite;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+using System.Diagnostics;
+
+namespace MyToDo.Data.Local
+{
+    public class DatabaseContext
+    {
+        private readonly SQLiteAsyncConnection _database;
+
+        public DatabaseContext(string dbPath)
+        {
+            _database = new SQLiteAsyncConnection(dbPath);
+            _database.CreateTableAsync<TaskModel>().Wait();
+        }
+
+        public async Task<List<TaskModel>> GetAllTasksAsync()
+        {
+            try
+            {
+                return await _database.Table<TaskModel>().ToListAsync();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in GetAllTasksAsync: {ex}");
+                return new List<TaskModel>();
+            }
+        }
+
+        public async Task<int> AddTaskAsync(TaskModel task)
+        {
+            try
+            {
+                return await _database.InsertAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in AddTaskAsync: {ex}");
+                return -1;
+            }
+        }
+
+        public async Task<int> UpdateTaskAsync(TaskModel task)
+        {
+            try
+            {
+                return await _database.UpdateAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in UpdateTaskAsync: {ex}");
+                return -1;
+            }
+        }
+
+        public async Task<int> DeleteTaskAsync(TaskModel task)
+        {
+            try
+            {
+                return await _database.DeleteAsync(task);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"---> Error in DeleteTaskAsync: {ex}");
+                return -1;
+            }
+        }
+    }
+}
+===========
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace MyToDo.Data.Remote
+{
+    using Firebase.Database;
+    using MyToDo.Models;
+
+    public class FirebaseService
+    {
+        private readonly FirebaseClient _firebase;
+
+        public FirebaseService()
+        {
+            _firebase = new FirebaseClient(
+                "https://mytodo-XXXXX.firebaseio.com/",
+                new FirebaseOptions { AuthTokenAsyncFactory = () => Task.FromResult("YOUR_FIREBASE_SECRET") }
+            );
+        }
+
+        public async Task SyncTasksAsync(IEnumerable<TaskModel> tasks)
+        {
+            // Push local tasks to Firebase
+            await _firebase.Child("tasks").PutAsync(tasks);
+        }
+
+        // Add methods to fetch remote changes
+    }
+}
+
+===========
+
+// Models/BaseEntity.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using SQLite;
+using System;
+
+namespace MyToDo.Models
+{
+    public abstract class BaseEntity : ObservableObject
+    {
+        [PrimaryKey, AutoIncrement]
+        public int Id { get; set; }
+        public DateTime CreatedDate { get; set; } = DateTime.Now;
+        public DateTime? ModifiedDate { get; set; }
+    }
+}
+===========
+
+// Models/RecurrencePattern.cs
+namespace MyToDo.Models
+{
+    public class RecurrencePattern
+    {
+        public string Type { get; set; }
+        public int Interval { get; set; }
+    }
+}
+===========
+
+// Models/Subtask.cs
+namespace MyToDo.Models
+{
+    public class Subtask
+    {
+        public string Description { get; set; }
+        public bool IsCompleted { get; set; }
+    }
+}
+===========
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using SQLite;
+using System.Collections.Generic;
+using System.Text.Json;
+using System.ComponentModel; // Manually implement INotifyPropertyChanged
+
+namespace MyToDo.Models
+{
+    public partial class TaskModel : BaseEntity, INotifyPropertyChanged
+    {
+        [ObservableProperty]
+        private bool _isDragging;
+        public string Description { get; set; }
+        public DateTime DueDate { get; set; }
+        public string Priority { get; set; }
+        public string Category { get; set; }
+        //public bool IsRecurring { get; set; } Remove the IsRecurring
+
+        private RecurrencePattern _recurrence;
+
+        [Ignore]
+        public RecurrencePattern Recurrence
+        {
+            get { return _recurrence; }
+            set
+            {
+                if (_recurrence != value)
+                {
+                    _recurrence = value;
+                    RecurrenceJson = JsonSerializer.Serialize(_recurrence); // Serialize on set
+                    OnPropertyChanged(nameof(Recurrence)); // Explicitly notify
+                }
+            }
+        }
+
+
+        private string _recurrenceJson;
+
+        public string RecurrenceJson
+        {
+            get { return _recurrenceJson; }
+            set
+            {
+                if (_recurrenceJson != value)
+                {
+                    _recurrenceJson = value;
+                    if (!string.IsNullOrEmpty(_recurrenceJson))
+                    {
+                        try
+                        {
+                            Recurrence = JsonSerializer.Deserialize<RecurrencePattern>(_recurrenceJson);
+                        }
+                        catch (JsonException)
+                        {
+                            Recurrence = new RecurrencePattern { Type = "Daily", Interval = 1 };
+                        }
+                    }
+                    OnPropertyChanged(nameof(RecurrenceJson)); // Explicitly notify
+
+                }
+            }
+        }
+
+
+        private List<Subtask> _subtasks = new();
+
+        [Ignore]
+        public List<Subtask> Subtasks
+        {
+            get { return _subtasks; }
+            set
+            {
+                if (_subtasks != value)
+                {
+                    _subtasks = value;
+                    SubtasksJson = JsonSerializer.Serialize(_subtasks); // Serialize on set
+                    OnPropertyChanged(nameof(Subtasks)); // Explicitly notify
+
+                }
+            }
+        }
+
+        private string _subtasksJson;
+
+        public string SubtasksJson
+        {
+            get { return _subtasksJson; }
+            set
+            {
+                if (_subtasksJson != value)
+                {
+                    _subtasksJson = value;
+
+                    if (!string.IsNullOrEmpty(_subtasksJson))
+                    {
+                        try
+                        {
+                            Subtasks = JsonSerializer.Deserialize<List<Subtask>>(_subtasksJson);
+                        }
+                        catch (JsonException)
+                        {
+                            Subtasks = new List<Subtask>();
+                        }
+                    }
+                    OnPropertyChanged(nameof(SubtasksJson)); // Explicitly notify
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged; // Required by INotifyPropertyChanged
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+        }
+    }
+}
+===========
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MyToDo.Data.Local;
+using MyToDo.Models;
+using System.Collections.ObjectModel;
+using System.Threading.Tasks;
+using System.Diagnostics; // Make sure to include this for Debug.WriteLine
+
+namespace MyToDo.ViewModels
+{
+    public partial class AddTaskViewModel : ObservableObject
+    {
+        [ObservableProperty]
+        private string _description;
+
+        [ObservableProperty]
+        private DateTime _dueDate = DateTime.Now;
+
+        [ObservableProperty]
+        private string _priority = "Medium";
+
+        [ObservableProperty]
+        private string _category;
+
+        [ObservableProperty]
+        private string _recurrenceType = "None";
+
+        [ObservableProperty]
+        private int _recurrenceInterval = 1;
+
+        [ObservableProperty]
+        private ObservableCollection<Subtask> _subtasks = new();
+
+        private readonly DatabaseContext _databaseContext;
+        private TaskModel _taskToEdit;
+
+        // Constructor for adding a new task
+        public AddTaskViewModel(DatabaseContext databaseContext)
+        {
+            _databaseContext = databaseContext;
+            AddSubtask(); // Start with one empty subtask
+            Category = "Work"; // Default category
+        }
+
+        // Constructor for editing an existing task
+        public AddTaskViewModel(DatabaseContext databaseContext, TaskModel taskToEdit)
+        {
+            _databaseContext = databaseContext;
+            _taskToEdit = taskToEdit;
+
+            Description = taskToEdit.Description;
+            DueDate = taskToEdit.DueDate;
+            Priority = taskToEdit.Priority;
+            Category = taskToEdit.Category;
+
+            if (taskToEdit.Recurrence != null)
+            {
+                RecurrenceType = taskToEdit.Recurrence.Type;
+                RecurrenceInterval = taskToEdit.Recurrence.Interval;
+            }
+            else
+            {
+                RecurrenceType = "None";
+            }
+
+            // IMPORTANT: Load subtasks correctly
+            if (taskToEdit.Subtasks != null)
+            {
+                foreach (var sub in taskToEdit.Subtasks)
+                {
+                    Subtasks.Add(new Subtask { Description = sub.Description, IsCompleted = sub.IsCompleted }); // Create new instances
+                }
+            }
+        }
+
+        [RelayCommand]
+        private void AddSubtask()
+        {
+            Subtasks.Add(new Subtask { Description = "", IsCompleted = false });
+        }
+
+        [RelayCommand]
+        private void RemoveSubtask(Subtask subtask)
+        {
+            Subtasks.Remove(subtask);
+        }
+
+        [RelayCommand]
+        private async Task SaveTask()
+        {
+            RecurrencePattern recurrence = null;
+            if (RecurrenceType != "None")
+            {
+                recurrence = new RecurrencePattern { Type = RecurrenceType, Interval = RecurrenceInterval };
+            }
+
+            if (_taskToEdit != null)
+            {
+                // Update existing task
+                _taskToEdit.Description = Description;
+                _taskToEdit.DueDate = DueDate;
+                _taskToEdit.Priority = Priority;
+                _taskToEdit.Category = Category;
+                _taskToEdit.Recurrence = recurrence; // Correctly assign recurrence
+                _taskToEdit.Subtasks = new List<Subtask>(Subtasks);  //CRUCIAL: Create a *new* list.
+
+                await _databaseContext.UpdateTaskAsync(_taskToEdit);
+            }
+            else
+            {
+                // Create a new task
+                var newTask = new TaskModel
+                {
+                    Description = Description,
+                    DueDate = DueDate,
+                    Priority = Priority,
+                    Category = Category,
+                    Recurrence = recurrence, // Correctly assign recurrence
+                    Subtasks = new List<Subtask>(Subtasks) // CRUCIAL: Create a *new* list.
+                };
+                await _databaseContext.AddTaskAsync(newTask);
+            }
+
+            await Shell.Current.GoToAsync("..");
+        }
+    }
+}
+===========
+
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MyToDo.Data.Local;
+using MyToDo.Models;
+using MyToDo.Views;
+using System.Collections.ObjectModel;
+using System.Diagnostics;
+using System.Threading.Tasks;
+
+namespace MyToDo.ViewModels
+{
+    public partial class HomeViewModel : ObservableObject
+    {
+        [ObservableProperty]
+        private ObservableCollection<TaskModel> _tasks = new();
+
+        private readonly DatabaseContext _databaseContext;
+        private bool _isLoaded = false; // Flag to prevent initial double loading
+
+        public HomeViewModel(DatabaseContext databaseContext)
+        {
+            _databaseContext = databaseContext;
+        }
+
+        // Call this method to refresh the task list.
+        public async Task LoadTasksAsync()
+        {
+            if (_isLoaded) return; // Prevent double loading ON STARTUP
+
+            Debug.WriteLine("---> LoadTasksAsync called");
+
+            _isLoaded = true; // Set the flag - but ONLY on initial load
+            Tasks.Clear();
+            var loadedTasks = await _databaseContext.GetAllTasksAsync();
+
+            Debug.WriteLine($"---> Loaded {loadedTasks.Count} tasks from database");
+
+            foreach (var task in loadedTasks)
+            {
+                Debug.WriteLine($"---> Task: {task.Description}, Due: {task.DueDate}"); // Show Description
+                Tasks.Add(task);
+            }
+        }
+
+        // IMPORTANT: Add this method to reset the flag
+        public void ResetIsLoaded()
+        {
+            _isLoaded = false;
+        }
+
+        [RelayCommand]
+        private async Task AddTask()
+        {
+            var addTaskViewModel = new AddTaskViewModel(_databaseContext);
+            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
+            {
+                {nameof(AddTaskViewModel), addTaskViewModel }
+            });
+        }
+
+        [RelayCommand]
+        private async Task GoToEditTask(TaskModel task)
+        {
+            if (task == null) return;
+
+            var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
+            await Shell.Current.GoToAsync($"{nameof(AddTaskView)}?id={task.Id}",
+               new Dictionary<string, object>
+               {
+                    {nameof(AddTaskViewModel), addTaskViewModel }
+               });
+        }
+
+        [RelayCommand]
+        private async Task DeleteTask(TaskModel task)
+        {
+            if (task == null) return;
+
+            await _databaseContext.DeleteTaskAsync(task);
+            Tasks.Remove(task); // Remove from the observable collection too
+        }
+    }
+}
+===========
+
+using MyToDo.ViewModels;
+
+namespace MyToDo.Views;
+
+public partial class AddTaskView : ContentPage
+{
+    public AddTaskView(AddTaskViewModel viewModel)
+    {
+        InitializeComponent();
+        BindingContext = viewModel;
+    }
+}
+===========
+
+using MyToDo.ViewModels;
+
+namespace MyToDo.Views;
+
+public partial class TaskListView : ContentPage
+{
+    public TaskListView(HomeViewModel viewModel)
+    {
+        InitializeComponent();
+        BindingContext = viewModel;
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+
+        if (BindingContext is HomeViewModel vm)
+        {
+            vm.ResetIsLoaded(); // Reset the flag BEFORE loading
+            await vm.LoadTasksAsync(); // Reload data
+        }
+    }
+}
+===========
+
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
+             xmlns:model="clr-namespace:MyToDo.Models"
+             x:Class="MyToDo.Views.AddTaskView"
+             Title="Add Task">
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20"
+                             Spacing="10">
+            <!-- REMOVED: Title Entry -->
+
+            <Label Text="Description:" />
+            <Editor Text="{Binding Description}"
+                    AutoSize="TextChanges" />
+
+            <Label Text="Due Date:" />
+            <DatePicker Date="{Binding DueDate}" />
+
+            <Label Text="Priority:" />
+            <Picker SelectedItem="{Binding Priority}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>High</x:String>
+                        <x:String>Medium</x:String>
+                        <x:String>Low</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Category:" />
+            <!--<Picker ItemsSource="{Binding Categories}"
+                    SelectedItem="{Binding Category}" />-->
+            <Picker SelectedItem="{Binding Category}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>1st Circle Visits</x:String>
+                        <x:String>2nd Circle Visits</x:String>
+                        <x:String>Health</x:String>
+                        <x:String>Work</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Recurrence Type:" />
+            <Picker SelectedItem="{Binding RecurrenceType}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>None</x:String>
+                        <x:String>Daily</x:String>
+                        <x:String>Weekly</x:String>
+                        <x:String>Monthly</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Recurrence Interval:" />
+            <Entry Text="{Binding RecurrenceInterval, Converter={StaticResource StringToIntConverter}}"
+                   Keyboard="Numeric" />
+
+            <!-- Subtasks Section -->
+            <Label Text="Subtasks:" />
+            <CollectionView ItemsSource="{Binding Subtasks}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:Subtask">
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <CheckBox IsChecked="{Binding IsCompleted}" />
+                            <Entry Grid.Column="1"
+                                   Text="{Binding Description}"
+                                   Placeholder="Subtask description" />
+                            <Button Grid.Column="2"
+                                    Text="-"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:AddTaskViewModel}}, Path=RemoveSubtaskCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+            <Button Text="+"
+                    Command="{Binding AddSubtaskCommand}" />
+
+
+            <Button Text="Save"
+                    Command="{Binding SaveTaskCommand}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+===========
+
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
+             xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
+             xmlns:model="clr-namespace:MyToDo.Models"
+             x:Class="MyToDo.Views.TaskListView"
+             Title="My Tasks">
+
+    <Grid RowDefinitions="Auto, *">
+        <!-- Define rows for the Grid: Auto for button, * for CollectionView -->
+
+        <Button Text="Add Task"
+                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=AddTaskCommand}"
+                Margin="10"
+                Grid.Row="0" />
+        <!-- Place the button in the first row (row 0) -->
+
+        <CollectionView ItemsSource="{Binding Tasks}"
+                        Grid.Row="1">
+            <!-- Place the CollectionView in the second row (row 1) -->
+            <CollectionView.ItemTemplate>
+                <DataTemplate x:DataType="model:TaskModel">
+                    <Frame Padding="10"
+                           BackgroundColor="{StaticResource Primary}"
+                           Opacity="{Binding IsDragging, Converter={StaticResource BoolToOpacityConverter}}">
+
+                        <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto"
+                              ColumnDefinitions="*, Auto">
+
+                            <!-- Row 0: Description -->
+                            <Label Text="{Binding Description}"
+                                   FontSize="18"
+                                   FontAttributes="Bold"
+                                   TextColor="White"
+                                   Grid.Row="0"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2" />
+
+                            <!-- Row 1: Due Date -->
+                            <Label Text="{Binding DueDate, StringFormat='Due: {0:g}'}"
+                                   FontSize="14"
+                                   TextColor="White"
+                                   Grid.Row="1"
+                                   Grid.Column="0" />
+
+                            <!-- Row 2: Category -->
+                            <Label Text="{Binding Category, StringFormat='Category: {0}'}"
+                                   FontSize="14"
+                                   TextColor="White"
+                                   Grid.Row="2"
+                                   Grid.Column="0" />
+
+                            <!-- Row 3: Priority -->
+                            <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
+                                   FontSize="14"
+                                   TextColor="White"
+                                   Grid.Row="3"
+                                   Grid.Column="0" />
+
+                            <!-- Row 4: Recurrence -->
+                            <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
+                                   FontSize="14"
+                                   TextColor="White"
+                                   Grid.Row="4"
+                                   Grid.Column="0" />
+                            <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
+                                   IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
+                                   FontSize="14"
+                                   TextColor="White"
+                                   Grid.Row="4"
+                                   Grid.Column="1" />
+
+                            <!-- Row 5: Subtasks (Nested CollectionView) -->
+                            <CollectionView ItemsSource="{Binding Subtasks}"
+                                            Grid.Row="5"
+                                            Grid.Column="0"
+                                            Grid.ColumnSpan="2"
+                                            Margin="10,0,0,0">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="model:Subtask">
+                                        <Grid ColumnDefinitions="Auto, *">
+                                            <CheckBox IsChecked="{Binding IsCompleted}"
+                                                      VerticalOptions="Center" />
+                                            <Label Text="{Binding Description}"
+                                                   Grid.Column="1"
+                                                   VerticalOptions="Center"
+                                                   TextColor="White" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+
+                            <!-- Row 6: Delete Button and creation date-->
+                            <Label Text="{Binding CreatedDate, StringFormat='Created: {0:g}'}"
+                                   FontSize="12"
+                                   TextColor="White"
+                                   Grid.Row="6"
+                                   Grid.Column="0" />
+                            <Button Text="X"
+                                    Grid.Row="6"
+                                    Grid.Column="1"
+                                    BackgroundColor="Red"
+                                    TextColor="White"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
+                                    CommandParameter="{Binding}"
+                                    Padding="5,0"
+                                    HorizontalOptions="End" />
+
+                            <!-- Gestures -->
+                            <Grid.GestureRecognizers>
+                                <DragGestureRecognizer DragStartingCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DragStartingCommand}"
+                                                       DragStartingCommandParameter="{Binding}" />
+                                <DropGestureRecognizer DropCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropCompletedCommand}"
+                                                       DropCommandParameter="{Binding}" />
+                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
+                                                      CommandParameter="{Binding}" />
+                            </Grid.GestureRecognizers>
+                        </Grid>
+                    </Frame>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+    </Grid>
+</ContentPage>
+===========
+

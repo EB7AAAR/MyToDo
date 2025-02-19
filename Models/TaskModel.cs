@@ -2,64 +2,44 @@
 using SQLite;
 using System.Collections.Generic;
 using System.Text.Json;
-using System.ComponentModel; // Manually implement INotifyPropertyChanged
+using System;
 
 namespace MyToDo.Models
 {
-    public partial class TaskModel : BaseEntity, INotifyPropertyChanged
+    public partial class TaskModel : BaseEntity
     {
         [ObservableProperty]
         private bool _isDragging;
-        public string Description { get; set; }
-        public DateTime DueDate { get; set; }
-        public string Priority { get; set; }
-        public string Category { get; set; }
-        //public bool IsRecurring { get; set; } Remove the IsRecurring
+
+        [ObservableProperty]
+        private string _description;
+
+        [ObservableProperty]
+        private DateTime _dueDate;
+
+        [ObservableProperty]
+        private string _priority;
+
+        [ObservableProperty]
+        private string _category;
 
         private RecurrencePattern _recurrence;
 
         [Ignore]
         public RecurrencePattern Recurrence
         {
-            get { return _recurrence; }
+            get => _recurrence;
             set
             {
-                if (_recurrence != value)
+                if (SetProperty(ref _recurrence, value))
                 {
-                    _recurrence = value;
-                    RecurrenceJson = JsonSerializer.Serialize(_recurrence); // Serialize on set
-                    OnPropertyChanged(nameof(Recurrence)); // Explicitly notify
+                    RecurrenceJson = JsonSerializer.Serialize(_recurrence);
                 }
             }
         }
 
-
+        [ObservableProperty] // This generates a RecurrenceJson property.
         private string _recurrenceJson;
-
-        public string RecurrenceJson
-        {
-            get { return _recurrenceJson; }
-            set
-            {
-                if (_recurrenceJson != value)
-                {
-                    _recurrenceJson = value;
-                    if (!string.IsNullOrEmpty(_recurrenceJson))
-                    {
-                        try
-                        {
-                            Recurrence = JsonSerializer.Deserialize<RecurrencePattern>(_recurrenceJson);
-                        }
-                        catch (JsonException)
-                        {
-                            Recurrence = new RecurrencePattern { Type = "Daily", Interval = 1 };
-                        }
-                    }
-                    OnPropertyChanged(nameof(RecurrenceJson)); // Explicitly notify
-
-                }
-            }
-        }
 
 
         private List<Subtask> _subtasks = new();
@@ -67,50 +47,17 @@ namespace MyToDo.Models
         [Ignore]
         public List<Subtask> Subtasks
         {
-            get { return _subtasks; }
+            get => _subtasks;
             set
             {
-                if (_subtasks != value)
+                if (SetProperty(ref _subtasks, value))
                 {
-                    _subtasks = value;
-                    SubtasksJson = JsonSerializer.Serialize(_subtasks); // Serialize on set
-                    OnPropertyChanged(nameof(Subtasks)); // Explicitly notify
-
+                    SubtasksJson = JsonSerializer.Serialize(_subtasks);
                 }
             }
         }
 
+        [ObservableProperty]
         private string _subtasksJson;
-
-        public string SubtasksJson
-        {
-            get { return _subtasksJson; }
-            set
-            {
-                if (_subtasksJson != value)
-                {
-                    _subtasksJson = value;
-
-                    if (!string.IsNullOrEmpty(_subtasksJson))
-                    {
-                        try
-                        {
-                            Subtasks = JsonSerializer.Deserialize<List<Subtask>>(_subtasksJson);
-                        }
-                        catch (JsonException)
-                        {
-                            Subtasks = new List<Subtask>();
-                        }
-                    }
-                    OnPropertyChanged(nameof(SubtasksJson)); // Explicitly notify
-                }
-            }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged; // Required by INotifyPropertyChanged
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
     }
 }

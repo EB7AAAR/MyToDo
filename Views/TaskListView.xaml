@@ -7,119 +7,151 @@
              x:Class="MyToDo.Views.TaskListView"
              Title="My Tasks">
 
-    <Grid RowDefinitions="Auto, *">
-        <!-- Define rows for the Grid: Auto for button, * for CollectionView -->
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <toolkit:InvertedBoolConverter x:Key="BoolNegationConverter" />
+        </ResourceDictionary>
+    </ContentPage.Resources>
 
+
+    <Grid RowDefinitions="Auto, *">
         <Button Text="Add Task"
-                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=AddTaskCommand}"
+                Command="{Binding AddTaskCommand}"
                 Margin="10"
                 Grid.Row="0" />
-        <!-- Place the button in the first row (row 0) -->
 
-        <CollectionView ItemsSource="{Binding Tasks}"
-                        Grid.Row="1">
-            <!-- Place the CollectionView in the second row (row 1) -->
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="model:TaskModel">
-                    <Frame Padding="10"
-                           BackgroundColor="{StaticResource Primary}"
-                           Opacity="{Binding IsDragging, Converter={StaticResource BoolToOpacityConverter}}">
+        <RefreshView Grid.Row="1"
+                     Command="{Binding RefreshTasksCommand}"
+                     IsRefreshing="{Binding IsRefreshing}">
+            <Grid>
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   HorizontalOptions="Center"
+                                   VerticalOptions="Center" />
+                <CollectionView ItemsSource="{Binding Tasks}"
+                                IsVisible="{Binding IsBusy, Converter={StaticResource BoolNegationConverter}}">
 
-                        <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto"
-                              ColumnDefinitions="*, Auto">
+                    <CollectionView.EmptyView>
+                        <StackLayout Padding="20"
+                                     HorizontalOptions="Center"
+                                     VerticalOptions="Center">
+                            <Label Text="No tasks yet.  Tap 'Add Task' to create one."
+                                   HorizontalTextAlignment="Center" />
+                        </StackLayout>
+                    </CollectionView.EmptyView>
 
-                            <!-- Row 0: Description -->
-                            <Label Text="{Binding Description}"
-                                   FontSize="18"
-                                   FontAttributes="Bold"
-                                   TextColor="White"
-                                   Grid.Row="0"
-                                   Grid.Column="0"
-                                   Grid.ColumnSpan="2" />
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="model:TaskModel">
+                            <toolkit:Expander>
+                                <toolkit:Expander.Header>
+                                    <Grid ColumnDefinitions="*, Auto, Auto"
+                                          Padding="10"
+                                          BackgroundColor="{StaticResource Primary}">
+                                        <Label Text="{Binding Description}"
+                                               FontSize="18"
+                                               FontAttributes="Bold"
+                                               TextColor="White"
+                                               VerticalOptions="Center" />
+                                        <Label Text="{Binding DueDate, StringFormat='{0:M/d}'}"
+                                               FontSize="14"
+                                               TextColor="White"
+                                               Grid.Column="1"
+                                               VerticalOptions="Center" />
+                                        <!-- Expander Icon -->
+                                        <Image Source="expand_more.png"
+                                               Grid.Column="2"
+                                               HeightRequest="20"
+                                               WidthRequest="20">
+                                            <Image.Triggers>
+                                                <DataTrigger TargetType="Image"
+                                                             Binding="{Binding Source={RelativeSource AncestorType={x:Type toolkit:Expander}}, Path=IsExpanded}"
+                                                             Value="True">
+                                                    <Setter Property="Source"
+                                                            Value="expand_less.png" />
+                                                </DataTrigger>
+                                            </Image.Triggers>
+                                        </Image>
+                                    </Grid>
+                                </toolkit:Expander.Header>
+                                <toolkit:Expander.Content>
+                                    <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto"
+                                          ColumnDefinitions="*, Auto"
+                                          Padding="10"
+                                          BackgroundColor="{StaticResource Primary}">
 
-                            <!-- Row 1: Due Date -->
-                            <Label Text="{Binding DueDate, StringFormat='Due: {0:g}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="1"
-                                   Grid.Column="0" />
+                                        <!-- Subtasks (Nested CollectionView) -->
+                                        <CollectionView ItemsSource="{Binding Subtasks}"
+                                                        Grid.Row="0"
+                                                        Grid.ColumnSpan="2"
+                                                        Margin="10,0,0,0">
+                                            <CollectionView.ItemTemplate>
+                                                <DataTemplate x:DataType="model:Subtask">
+                                                    <Grid ColumnDefinitions="Auto, *">
+                                                        <CheckBox IsChecked="{Binding IsCompleted}"
+                                                                  VerticalOptions="Center" />
+                                                        <Label Text="{Binding Description}"
+                                                               Grid.Column="1"
+                                                               VerticalOptions="Center"
+                                                               TextColor="White" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </CollectionView.ItemTemplate>
+                                        </CollectionView>
+                                        <!-- Category, Priority, Recurrence, etc. -->
+                                        <!-- Row 1: Category -->
+                                        <Label Text="{Binding Category, StringFormat='Category: {0}'}"
+                                               FontSize="14"
+                                               TextColor="White"
+                                               Grid.Row="1"
+                                               Grid.Column="0" />
 
-                            <!-- Row 2: Category -->
-                            <Label Text="{Binding Category, StringFormat='Category: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="2"
-                                   Grid.Column="0" />
+                                        <!-- Row 2: Priority -->
+                                        <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
+                                               FontSize="14"
+                                               TextColor="White"
+                                               Grid.Row="2"
+                                               Grid.Column="0" />
 
-                            <!-- Row 3: Priority -->
-                            <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="3"
-                                   Grid.Column="0" />
+                                        <!-- Row 3: Recurrence -->
+                                        <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
+                                               FontSize="14"
+                                               TextColor="White"
+                                               Grid.Row="3"
+                                               Grid.Column="0" />
+                                        <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
+                                               IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
+                                               FontSize="14"
+                                               TextColor="White"
+                                               Grid.Row="3"
+                                               Grid.Column="1" />
 
-                            <!-- Row 4: Recurrence -->
-                            <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="4"
-                                   Grid.Column="0" />
-                            <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
-                                   IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="4"
-                                   Grid.Column="1" />
-
-                            <!-- Row 5: Subtasks (Nested CollectionView) -->
-                            <CollectionView ItemsSource="{Binding Subtasks}"
-                                            Grid.Row="5"
-                                            Grid.Column="0"
-                                            Grid.ColumnSpan="2"
-                                            Margin="10,0,0,0">
-                                <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="model:Subtask">
-                                        <Grid ColumnDefinitions="Auto, *">
-                                            <CheckBox IsChecked="{Binding IsCompleted}"
-                                                      VerticalOptions="Center" />
-                                            <Label Text="{Binding Description}"
-                                                   Grid.Column="1"
-                                                   VerticalOptions="Center"
-                                                   TextColor="White" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
-
-                            <!-- Row 6: Delete Button and creation date-->
-                            <Label Text="{Binding CreatedDate, StringFormat='Created: {0:g}'}"
-                                   FontSize="12"
-                                   TextColor="White"
-                                   Grid.Row="6"
-                                   Grid.Column="0" />
-                            <Button Text="X"
-                                    Grid.Row="6"
-                                    Grid.Column="1"
-                                    BackgroundColor="Red"
-                                    TextColor="White"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
-                                    CommandParameter="{Binding}"
-                                    Padding="5,0"
-                                    HorizontalOptions="End" />
-
-                            <!-- Gestures -->
-                            <Grid.GestureRecognizers>
-                                <DragGestureRecognizer DragStartingCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DragStartingCommand}"
-                                                       DragStartingCommandParameter="{Binding}" />
-                                <DropGestureRecognizer DropCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropCompletedCommand}"
-                                                       DropCommandParameter="{Binding}" />
-                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
-                                                      CommandParameter="{Binding}" />
-                            </Grid.GestureRecognizers>
-                        </Grid>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                                        <!-- Row 4: Delete Button and creation date-->
+                                        <Label Text="{Binding CreatedDate, StringFormat='Created: {0:M/d/yyyy}'}"
+                                               FontSize="12"
+                                               TextColor="White"
+                                               Grid.Row="4"
+                                               Grid.Column="0" />
+                                        <Button Text="X"
+                                                Grid.Row="4"
+                                                Grid.Column="1"
+                                                BackgroundColor="Red"
+                                                TextColor="White"
+                                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
+                                                CommandParameter="{Binding}"
+                                                Padding="5,0"
+                                                HorizontalOptions="End" />
+                                        <!-- Gestures -->
+                                        <Grid.GestureRecognizers>
+                                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
+                                                                  CommandParameter="{Binding}" />
+                                        </Grid.GestureRecognizers>
+                                    </Grid>
+                                </toolkit:Expander.Content>
+                            </toolkit:Expander>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </Grid>
+        </RefreshView>
     </Grid>
 </ContentPage>

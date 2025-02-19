@@ -5,7 +5,7 @@ using MyToDo.Models;
 using MyToDo.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace MyToDo.ViewModels
 {
@@ -14,35 +14,67 @@ namespace MyToDo.ViewModels
         [ObservableProperty]
         private ObservableCollection<TaskModel> _tasks = new();
 
+        [ObservableProperty]
+        private bool _isBusy;
+
+        [ObservableProperty]
+        private bool _isRefreshing;
+
+        [ObservableProperty]
+        private string _errorMessage;
+
+
         private readonly DatabaseContext _databaseContext;
-        private bool _isLoaded = false; // Flag to prevent initial double loading
+        private bool _isLoaded = false;
 
         public HomeViewModel(DatabaseContext databaseContext)
         {
             _databaseContext = databaseContext;
         }
 
-        // Call this method to refresh the task list.
         public async Task LoadTasksAsync()
         {
-            if (_isLoaded) return; // Prevent double loading ON STARTUP
+            if (_isLoaded) return;
 
-            Debug.WriteLine("---> LoadTasksAsync called");
+            IsBusy = true;
+            _isLoaded = true;
+            ErrorMessage = null;
 
-            _isLoaded = true; // Set the flag - but ONLY on initial load
-            Tasks.Clear();
-            var loadedTasks = await _databaseContext.GetAllTasksAsync();
-
-            Debug.WriteLine($"---> Loaded {loadedTasks.Count} tasks from database");
-
-            foreach (var task in loadedTasks)
+            try
             {
-                Debug.WriteLine($"---> Task: {task.Description}, Due: {task.DueDate}"); // Show Description
-                Tasks.Add(task);
+                Tasks.Clear();
+                var loadedTasks = await _databaseContext.GetAllTasksAsync();
+
+                foreach (var task in loadedTasks)
+                {
+                    if (!string.IsNullOrEmpty(task.SubtasksJson))
+                    {
+                        try
+                        {
+                            task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
+                        }
+                        catch (JsonException)
+                        {
+                            task.Subtasks = new List<Subtask>();
+                            Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
+                        }
+                    }
+                    Tasks.Add(task);
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to load tasks: {ex.Message}";
+                Debug.WriteLine($"---> Error loading tasks: {ex}");
+                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
+            }
+            finally
+            {
+                IsBusy = false;
             }
         }
 
-        // IMPORTANT: Add this method to reset the flag
+
         public void ResetIsLoaded()
         {
             _isLoaded = false;
@@ -51,6 +83,7 @@ namespace MyToDo.ViewModels
         [RelayCommand]
         private async Task AddTask()
         {
+            ErrorMessage = null;
             var addTaskViewModel = new AddTaskViewModel(_databaseContext);
             await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
             {
@@ -62,7 +95,7 @@ namespace MyToDo.ViewModels
         private async Task GoToEditTask(TaskModel task)
         {
             if (task == null) return;
-
+            ErrorMessage = null;
             var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
             await Shell.Current.GoToAsync($"{nameof(AddTaskView)}?id={task.Id}",
                new Dictionary<string, object>
@@ -75,9 +108,35 @@ namespace MyToDo.ViewModels
         private async Task DeleteTask(TaskModel task)
         {
             if (task == null) return;
+            ErrorMessage = null;
+            try
+            {
+                await _databaseContext.DeleteTaskAsync(task);
+                Tasks.Remove(task);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
+                Debug.WriteLine($"---> Error Deleting tasks: {ex}");
+                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
+            }
 
-            await _databaseContext.DeleteTaskAsync(task);
-            Tasks.Remove(task); // Remove from the observable collection too
+        }
+
+        [RelayCommand]
+        private async Task RefreshTasks()
+        {
+            IsRefreshing = true;
+            _isLoaded = false;
+            ErrorMessage = null;
+            try
+            {
+                await LoadTasksAsync();
+            }
+            finally
+            {
+                IsRefreshing = false;
+            }
         }
     }
 }

@@ -1,8 +1,8 @@
-﻿// In MyToDo/Converters/StringToBoolConverter.cs (make sure the folder is correct)
+﻿// Converters/StringToBoolConverter.cs
 using System.Globalization;
-using Microsoft.Maui.Controls; // Ensure correct namespace
+using Microsoft.Maui.Controls;
 
-namespace MyToDo.Converters; // Correct namespace
+namespace MyToDo.Converters;
 
 public class StringToBoolConverter : IValueConverter
 {

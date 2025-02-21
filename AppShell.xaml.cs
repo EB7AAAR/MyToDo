@@ -8,5 +8,7 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
         Routing.RegisterRoute(nameof(AddTaskView), typeof(AddTaskView));
+        Routing.RegisterRoute(nameof(EditTaskView), typeof(EditTaskView)); // Add this line
+
     }
 }

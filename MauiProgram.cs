@@ -30,6 +30,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<TaskListView>();
         builder.Services.AddTransient<AddTaskViewModel>();
         builder.Services.AddTransient<AddTaskView>();
+        //Register EditTask
+        builder.Services.AddTransient<EditTaskViewModel>();
+        builder.Services.AddTransient<EditTaskView>();
 
 #if DEBUG
         builder.Logging.AddDebug();

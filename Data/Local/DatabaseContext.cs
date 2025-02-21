@@ -1,9 +1,10 @@
-﻿using MyToDo.Models;
+﻿// DatabaseContext.cs
+using MyToDo.Models;
 using SQLite;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using System; // Ensure this is included
+using System;
 
 namespace MyToDo.Data.Local
 {
@@ -26,8 +27,13 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in GetAllTasksAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
+        }
+        //add this function
+        public async Task<TaskModel> GetTaskByIdAsync(int taskId)
+        {
+            return await _database.Table<TaskModel>().FirstOrDefaultAsync(t => t.Id == taskId);
         }
 
         public async Task<int> AddTaskAsync(TaskModel task)
@@ -39,7 +45,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in AddTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -52,7 +58,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in UpdateTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -65,7 +71,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in DeleteTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
     }

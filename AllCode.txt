@@ -1,4 +1,5 @@
-﻿using MyToDo.Views;
+﻿'''
+using MyToDo.Views;
 
 namespace MyToDo;
 
@@ -10,8 +11,9 @@ public partial class App : Application
         MainPage = new AppShell();
     }
 }
-===========
+'''
 
+'''
 using MyToDo.Views;
 
 namespace MyToDo;
@@ -22,10 +24,13 @@ public partial class AppShell : Shell
     {
         InitializeComponent();
         Routing.RegisterRoute(nameof(AddTaskView), typeof(AddTaskView));
+        Routing.RegisterRoute(nameof(EditTaskView), typeof(EditTaskView)); // Add this line
+
     }
 }
-===========
+'''
 
+'''
 using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
 using MyToDo.Data.Local;
@@ -58,6 +63,9 @@ public static class MauiProgram
         builder.Services.AddSingleton<TaskListView>();
         builder.Services.AddTransient<AddTaskViewModel>();
         builder.Services.AddTransient<AddTaskView>();
+        //Register EditTask
+        builder.Services.AddTransient<EditTaskViewModel>();
+        builder.Services.AddTransient<EditTaskView>();
 
 #if DEBUG
         builder.Logging.AddDebug();
@@ -67,8 +75,9 @@ public static class MauiProgram
     }
 }
 
-===========
+'''
 
+'''
 <?xml version = "1.0" encoding = "UTF-8" ?>
 <Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -89,8 +98,9 @@ public static class MauiProgram
         </ResourceDictionary>
     </Application.Resources>
 </Application>
-===========
+'''
 
+'''
 <?xml version="1.0" encoding="UTF-8" ?>
 <Shell x:Class="MyToDo.AppShell"
        xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
@@ -104,8 +114,9 @@ public static class MauiProgram
                   Route="MainPage" />
 
 </Shell>
-===========
+'''
 
+'''
 using System.Globalization;
 
 namespace MyToDo.Converters
@@ -123,8 +134,9 @@ namespace MyToDo.Converters
         }
     }
 }
-===========
+'''
 
+'''
 using System.Globalization;
 
 namespace MyToDo.Converters;
@@ -146,8 +158,9 @@ public class StringToBoolConverter : IValueConverter
     }
 }
 
-===========
+'''
 
+'''
 using System.Globalization;
 
 namespace MyToDo.Converters;
@@ -172,11 +185,11 @@ public class StringToIntConverter : IValueConverter
         return 0; // Default value if parsing fails
     }
 }
-===========
+'''
 
+'''
 using System.Globalization;
 namespace MyToDo.Converters;
-
 public class ThemeToColorConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
@@ -200,14 +213,16 @@ public class ThemeToColorConverter : IValueConverter
         throw new NotImplementedException(); // Not needed for this scenario
     }
 }
-===========
+'''
 
+'''
+// DatabaseContext.cs
 using MyToDo.Models;
 using SQLite;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
-using System; // Ensure this is included
+using System;
 
 namespace MyToDo.Data.Local
 {
@@ -230,8 +245,13 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in GetAllTasksAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
+        }
+        //add this function
+        public async Task<TaskModel> GetTaskByIdAsync(int taskId)
+        {
+            return await _database.Table<TaskModel>().FirstOrDefaultAsync(t => t.Id == taskId);
         }
 
         public async Task<int> AddTaskAsync(TaskModel task)
@@ -243,7 +263,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in AddTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -256,7 +276,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in UpdateTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
 
@@ -269,13 +289,14 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in DeleteTaskAsync: {ex}");
-                throw; // Re-throw the exception
+                throw;
             }
         }
     }
 }
-===========
+'''
 
+'''
 using Firebase.Database;
 using Firebase.Database.Query;
 using MyToDo.Models;
@@ -355,8 +376,9 @@ namespace MyToDo.Data.Remote
         }
     }
 }
-===========
+'''
 
+'''
 using CommunityToolkit.Mvvm.ComponentModel;
 using SQLite;
 
@@ -370,8 +392,9 @@ namespace MyToDo.Models
         public DateTime? ModifiedDate { get; set; }
     }
 }
-===========
+'''
 
+'''
 namespace MyToDo.Models
 {
     public class RecurrencePattern
@@ -380,8 +403,9 @@ namespace MyToDo.Models
         public int Interval { get; set; }
     }
 }
-===========
+'''
 
+'''
 namespace MyToDo.Models
 {
     public class Subtask
@@ -390,8 +414,9 @@ namespace MyToDo.Models
         public bool IsCompleted { get; set; }
     }
 }
-===========
+'''
 
+'''
 using CommunityToolkit.Mvvm.ComponentModel;
 using SQLite;
 using System.Collections.Generic;
@@ -457,328 +482,358 @@ namespace MyToDo.Models
         private string _subtasksJson;
     }
 }
-===========
+'''
 
-// AddTaskViewModel.cs (Full code, with explanations)
-
+'''
+// AddTaskViewModel.cs (Simplified for *adding* only)
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
 using MyToDo.Models;
 using System.Collections.ObjectModel;
-using System.Text.Json; // Ensure this is present
+using System.Text.Json;
 
-namespace MyToDo.ViewModels
+namespace MyToDo.ViewModels;
+
+public partial class AddTaskViewModel : ObservableObject
 {
-    public partial class AddTaskViewModel : ObservableObject
+    [ObservableProperty]
+    private string _description;
+
+    [ObservableProperty]
+    private DateTime _dueDate = DateTime.Now;
+
+    [ObservableProperty]
+    private string _priority = "Medium";
+
+    [ObservableProperty]
+    private string _category;
+
+    [ObservableProperty]
+    private string _recurrenceType = "None";
+
+    [ObservableProperty]
+    private int _recurrenceInterval = 1;
+
+    [ObservableProperty]
+    private ObservableCollection<Subtask> _subtasks = new();
+
+    private readonly DatabaseContext _databaseContext;
+
+    public AddTaskViewModel(DatabaseContext databaseContext)
     {
-        [ObservableProperty]
-        private string _description;
+        _databaseContext = databaseContext;
+        AddSubtask(); // Start with one empty subtask
+        Category = "Work";
+    }
+    [RelayCommand]
+    private void AddSubtask()
+    {
+        Subtasks.Add(new Subtask { Description = "", IsCompleted = false });
+    }
 
-        [ObservableProperty]
-        private DateTime _dueDate = DateTime.Now;
+    [RelayCommand]
+    private void RemoveSubtask(Subtask subtask)
+    {
+        Subtasks.Remove(subtask);
+    }
 
-        [ObservableProperty]
-        private string _priority = "Medium";
-
-        [ObservableProperty]
-        private string _category;
-
-        [ObservableProperty]
-        private string _recurrenceType = "None";
-
-        [ObservableProperty]
-        private int _recurrenceInterval = 1;
-
-        [ObservableProperty]
-        private ObservableCollection<Subtask> _subtasks = new();
-
-        private readonly DatabaseContext _databaseContext;
-        private TaskModel _taskToEdit; // This holds the task being edited
-
-        // Constructor for adding a new task
-        public AddTaskViewModel(DatabaseContext databaseContext)
+    [RelayCommand]
+    private async Task SaveTask()
+    {
+        RecurrencePattern recurrence = null;
+        if (RecurrenceType != "None")
         {
-            _databaseContext = databaseContext;
-            AddSubtask(); // Start with one empty subtask
-            Category = "Work"; // Default category
+            recurrence = new RecurrencePattern { Type = RecurrenceType, Interval = RecurrenceInterval };
         }
 
-        // Constructor for editing an existing task
-        public AddTaskViewModel(DatabaseContext databaseContext, TaskModel taskToEdit)
+        // Create a new task (no _taskToEdit logic here)
+        var newTask = new TaskModel
         {
-            _databaseContext = databaseContext;
-            _taskToEdit = taskToEdit; // Store the task to be edited
+            Description = Description,
+            DueDate = DueDate,
+            Priority = Priority,
+            Category = Category,
+            Recurrence = recurrence,
+            SubtasksJson = JsonSerializer.Serialize(Subtasks)
+        };
 
-            // Populate the properties with the existing task's data
-            Description = taskToEdit.Description;
-            DueDate = taskToEdit.DueDate;
-            Priority = taskToEdit.Priority;
-            Category = taskToEdit.Category;
-
-            // Handle Recurrence (check for null)
-            if (taskToEdit.Recurrence != null)
-            {
-                RecurrenceType = taskToEdit.Recurrence.Type;
-                RecurrenceInterval = taskToEdit.Recurrence.Interval;
-            }
-            else
-            {
-                RecurrenceType = "None"; // Default if no recurrence
-            }
-            // Deserialize Subtasks from JSON, handle potential errors.
-            if (!string.IsNullOrEmpty(taskToEdit.SubtasksJson))
-            {
-                try
-                {
-                    Subtasks = new ObservableCollection<Subtask>(JsonSerializer.Deserialize<List<Subtask>>(taskToEdit.SubtasksJson));
-                }
-                catch (JsonException)
-                {
-                    // Handle JSON deserialization errors (e.g., log, show error)
-                    Subtasks = new ObservableCollection<Subtask>(); // Reset to empty
-                }
-            }
-
-
-        }
-
-        [RelayCommand]
-        private void AddSubtask()
-        {
-            Subtasks.Add(new Subtask { Description = "", IsCompleted = false });
-        }
-
-        [RelayCommand]
-        private void RemoveSubtask(Subtask subtask)
-        {
-            Subtasks.Remove(subtask);
-        }
-
-        [RelayCommand]
-        private async Task SaveTask()
-        {
-            // Create the RecurrencePattern object (if needed)
-            RecurrencePattern recurrence = null;
-            if (RecurrenceType != "None")
-            {
-                recurrence = new RecurrencePattern { Type = RecurrenceType, Interval = RecurrenceInterval };
-            }
-
-            if (_taskToEdit != null)
-            {
-                // Update existing task
-                _taskToEdit.Description = Description;
-                _taskToEdit.DueDate = DueDate;
-                _taskToEdit.Priority = Priority;
-                _taskToEdit.Category = Category;
-                _taskToEdit.Recurrence = recurrence; // Assign the RecurrencePattern
-                _taskToEdit.SubtasksJson = JsonSerializer.Serialize(Subtasks); // Serialize Subtasks
-
-                await _databaseContext.UpdateTaskAsync(_taskToEdit); // Update in the database
-            }
-            else
-            {
-                // Create a new task
-                var newTask = new TaskModel
-                {
-                    Description = Description,
-                    DueDate = DueDate,
-                    Priority = Priority,
-                    Category = Category,
-                    Recurrence = recurrence, // Assign the RecurrencePattern
-                    SubtasksJson = JsonSerializer.Serialize(Subtasks) // Serialize Subtasks
-
-                };
-                await _databaseContext.AddTaskAsync(newTask); // Add to the database
-            }
-
-            await Shell.Current.GoToAsync(".."); // Navigate back
-        }
+        await _databaseContext.AddTaskAsync(newTask);
+        await Shell.Current.GoToAsync("..");
     }
 }
-===========
+'''
 
+'''
+// EditTaskViewModel.cs
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using MyToDo.Data.Local;
+using MyToDo.Models;
+using System.Collections.ObjectModel;
+using System.Text.Json;
+using System.Diagnostics;
+
+
+namespace MyToDo.ViewModels;
+
+public partial class EditTaskViewModel : ObservableObject, IQueryAttributable
+{
+    [ObservableProperty]
+    private TaskModel _task;
+
+    [ObservableProperty] private ObservableCollection<Subtask> _subtasks = new();
+
+
+    private readonly DatabaseContext _databaseContext;
+
+    public EditTaskViewModel(DatabaseContext databaseContext)
+    {
+        _databaseContext = databaseContext;
+
+    }
+
+    public async void ApplyQueryAttributes(IDictionary<string, object> query)
+    {
+        if (query.ContainsKey("taskId") && query["taskId"] is string taskIdString && int.TryParse(taskIdString, out int taskId))
+        {
+            await LoadTask(taskId);
+
+        }
+    }
+
+    private async Task LoadTask(int taskId)
+    {
+        Task = await _databaseContext.GetTaskByIdAsync(taskId);
+
+        if (Task == null)
+        {
+            // Handle case where task is not found (e.g., show error, navigate back)
+            Debug.WriteLine($"---> Task with ID {taskId} not found.");
+            await Shell.Current.GoToAsync(".."); // Or show an error message
+            return;
+        }
+
+        //get subtasks from json and assign it to observalblecollection
+        if (!string.IsNullOrEmpty(Task.SubtasksJson))
+        {
+            try
+            {
+                Subtasks = new ObservableCollection<Subtask>(JsonSerializer.Deserialize<List<Subtask>>(Task.SubtasksJson));
+            }
+            catch (JsonException ex)
+            {
+                Subtasks = new ObservableCollection<Subtask>();
+                Debug.WriteLine($"---> Error deserializing subtasks: {ex.Message}");
+            }
+        }
+        //load the receurrence
+        if (!string.IsNullOrEmpty(Task.RecurrenceJson))
+        {
+            try
+            {
+                Task.Recurrence = JsonSerializer.Deserialize<RecurrencePattern>(Task.RecurrenceJson);
+                OnPropertyChanged(nameof(Task)); // VERY IMPORTANT: Notify the UI
+            }
+            catch (JsonException ex)
+            {
+                Task.Recurrence = null; // Or handle as appropriate
+                Debug.WriteLine($"---> Error deserializing RecurrenceJson: {ex.Message}");
+            }
+
+        }
+        //if there is no recurence set the values by default
+        else
+        {
+            Task.Recurrence = new() { Type = "None", Interval = 1 };
+            OnPropertyChanged(nameof(Task)); // VERY IMPORTANT: Notify the UI
+
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveChanges()
+    {
+        if (Task == null) return;
+        // Update the task
+        Task.SubtasksJson = JsonSerializer.Serialize(Subtasks);
+        //save recurrece
+        Task.RecurrenceJson = JsonSerializer.Serialize(Task.Recurrence);
+        await _databaseContext.UpdateTaskAsync(Task);
+        await Shell.Current.GoToAsync("..");
+    }
+
+    [RelayCommand]
+    private void AddSubtask()
+    {
+        Subtasks.Add(new Subtask { Description = "", IsCompleted = false });
+    }
+
+    [RelayCommand]
+    private void RemoveSubtask(Subtask subtask)
+    {
+        if (subtask == null) return;
+        Subtasks.Remove(subtask);
+    }
+}
+'''
+
+'''
 // ViewModels/HomeViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
+using MyToDo.Data.Remote;
 using MyToDo.Models;
 using MyToDo.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Text.Json;
-using System;
-using System.Windows.Input;
-using MyToDo.Data.Remote;
 
-namespace MyToDo.ViewModels
+namespace MyToDo.ViewModels;
+
+public partial class HomeViewModel : ObservableObject
 {
-    public partial class HomeViewModel : ObservableObject
+    [ObservableProperty]
+    private ObservableCollection<TaskModel> _tasks = new();
+
+    [ObservableProperty]
+    private bool _isBusy;
+
+    [ObservableProperty]
+    private string _errorMessage;
+
+    private readonly DatabaseContext _databaseContext;
+    private readonly FirebaseService _firebaseService;  // Keep this if you plan to use Firebase
+    private bool _isLoaded = false;
+
+    public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
     {
-        [ObservableProperty]
-        private ObservableCollection<TaskModel> _tasks = new();
+        _databaseContext = databaseContext;
+        _firebaseService = firebaseService; // Keep this if you plan to use Firebase
+    }
 
-        [ObservableProperty]
-        private bool _isBusy;
+    public async Task LoadTasksAsync()
+    {
+        if (_isLoaded) return;
 
-        [ObservableProperty]
-        private string _errorMessage;
+        IsBusy = true;
+        _isLoaded = true;
+        ErrorMessage = null;
 
-        // Drag and drop commands
-        public ICommand DragStartingCommand { get; }
-        public ICommand DropOverCommand { get; }
-        public ICommand DropCommand { get; }
-
-        private readonly DatabaseContext _databaseContext;
-        private readonly FirebaseService _firebaseService;
-        private bool _isLoaded = false;
-
-        public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
+        try
         {
-            _databaseContext = databaseContext;
-            _firebaseService = firebaseService;
-            // Initialize the commands
-            DragStartingCommand = new Command<TaskModel>(OnDragStarting);
-            DropOverCommand = new Command<TaskModel>(OnDropOver);
-            DropCommand = new Command<TaskModel>(OnDrop);
-        }
+            Tasks.Clear();
+            var loadedTasks = await _databaseContext.GetAllTasksAsync();
 
-        // ... (LoadTasksAsync, ResetIsLoaded, AddTask, GoToEditTask, DeleteTask - as before) ...
-        public async Task LoadTasksAsync()
-        {
-            if (_isLoaded) return;
-
-            IsBusy = true;
-            _isLoaded = true;
-            ErrorMessage = null;
-
-            try
+            foreach (var task in loadedTasks)
             {
-                Tasks.Clear();
-                var loadedTasks = await _databaseContext.GetAllTasksAsync();
-
-                foreach (var task in loadedTasks)
+                if (!string.IsNullOrEmpty(task.SubtasksJson))
                 {
-                    if (!string.IsNullOrEmpty(task.SubtasksJson))
+                    try
                     {
-                        try
-                        {
-                            task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
-                        }
-                        catch (JsonException)
-                        {
-                            task.Subtasks = new List<Subtask>();
-                            Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
-                        }
+                        task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
                     }
-                    Tasks.Add(task);
+                    catch (JsonException)
+                    {
+                        task.Subtasks = new List<Subtask>();
+                        Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Failed to load tasks: {ex.Message}";
-                Debug.WriteLine($"---> Error loading tasks: {ex}");
-                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
-            }
-            finally
-            {
-                IsBusy = false;
+                Tasks.Add(task);
             }
         }
-
-        public void ResetIsLoaded()
+        catch (Exception ex)
         {
-            _isLoaded = false;
+            ErrorMessage = $"Failed to load tasks: {ex.Message}";
+            Debug.WriteLine($"---> Error loading tasks: {ex}");
+            await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
         }
-
-        [RelayCommand]
-        private async Task AddTask()
+        finally
         {
-            ErrorMessage = null;
-            var addTaskViewModel = new AddTaskViewModel(_databaseContext);
-            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
-            {
-                {nameof(AddTaskViewModel), addTaskViewModel }
-            });
-        }
-
-        [RelayCommand]
-        private async Task GoToEditTask(TaskModel task)
-        {
-            if (task == null) return;
-            ErrorMessage = null;
-
-            // Create the AddTaskViewModel with the task to edit.
-            var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
-
-            // Pass the ViewModel in the navigation parameters.
-            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
-            {
-                { nameof(AddTaskViewModel), addTaskViewModel }
-            });
-        }
-
-        [RelayCommand]
-        private async Task DeleteTask(TaskModel task)
-        {
-            if (task == null) return;
-            ErrorMessage = null;
-            try
-            {
-                await _databaseContext.DeleteTaskAsync(task);
-                Tasks.Remove(task);
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
-                Debug.WriteLine($"---> Error Deleting tasks: {ex}");
-                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
-            }
-
-        }
-        private TaskModel _draggedTask; // Store the task being dragged
-
-        private void OnDragStarting(TaskModel task)
-        {
-            _draggedTask = task;
-        }
-
-        private void OnDropOver(TaskModel task)
-        {
-            // Could add visual feedback here (e.g., highlighting the drop target)
-        }
-
-        private void OnDrop(TaskModel dropTask)
-        {
-            if (_draggedTask == null || dropTask == null)
-            {
-                return;
-            }
-
-            if (ReferenceEquals(_draggedTask, dropTask))
-            {
-                return; // Dropped on itself
-            }
-
-            int dragIndex = Tasks.IndexOf(_draggedTask);
-            int dropIndex = Tasks.IndexOf(dropTask);
-
-            if (dragIndex == -1 || dropIndex == -1)
-            {
-                return;
-            }
-
-            Tasks.RemoveAt(dragIndex);
-            Tasks.Insert(dropIndex, _draggedTask);
-
-            _draggedTask = null;
+            IsBusy = false;
         }
     }
-}
-===========
 
+    public void ResetIsLoaded()
+    {
+        _isLoaded = false;
+    }
+
+    [RelayCommand]
+    private async Task AddTask()
+    {
+        ErrorMessage = null;
+        await Shell.Current.GoToAsync(nameof(AddTaskView)); // No need to pass the ViewModel
+    }
+
+    [RelayCommand]
+    private async Task GoToEditTask(TaskModel task)
+    {
+        if (task == null) return;
+        ErrorMessage = null;
+
+        // Use query parameters to pass the task ID
+        await Shell.Current.GoToAsync($"{nameof(EditTaskView)}?taskId={task.Id}");
+    }
+
+    [RelayCommand]
+    private async Task DeleteTask(TaskModel task)
+    {
+        if (task == null) return;
+        ErrorMessage = null;
+        try
+        {
+            await _databaseContext.DeleteTaskAsync(task);
+            Tasks.Remove(task);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
+            Debug.WriteLine($"---> Error Deleting tasks: {ex}");
+            await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
+        }
+    }
+
+    private TaskModel _draggedTask;
+
+    [RelayCommand]
+    private void DragStarting(TaskModel task)
+    {
+        _draggedTask = task;
+    }
+
+    [RelayCommand]
+    private void DropOver(TaskModel task)
+    {
+        // Could add visual feedback here (e.g., highlighting the drop target)
+    }
+
+    [RelayCommand]
+    private void Drop(TaskModel dropTask)
+    {
+        if (_draggedTask == null || dropTask == null || ReferenceEquals(_draggedTask, dropTask))
+        {
+            return;
+        }
+
+        int dragIndex = Tasks.IndexOf(_draggedTask);
+        int dropIndex = Tasks.IndexOf(dropTask);
+
+        if (dragIndex == -1 || dropIndex == -1)
+        {
+            return;
+        }
+
+        Tasks.RemoveAt(dragIndex);
+        Tasks.Insert(dropIndex, _draggedTask);
+
+        _draggedTask = null;
+    }
+}
+'''
+
+'''
 // AddTaskView.xaml.cs
 using MyToDo.ViewModels;
 using System.Threading.Tasks; // Make sure this is included
@@ -793,7 +848,7 @@ public partial class AddTaskView : ContentPage
         BindingContext = viewModel;
     }
 
-    protected override async void OnAppearing() // Make this async void
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
 
@@ -805,8 +860,26 @@ public partial class AddTaskView : ContentPage
         }
     }
 }
-===========
+'''
 
+'''
+// EditTaskView.xaml.cs
+using MyToDo.ViewModels;
+
+namespace MyToDo.Views;
+
+public partial class EditTaskView : ContentPage
+{
+    public EditTaskView(EditTaskViewModel viewModel)
+    {
+        InitializeComponent();
+        BindingContext = viewModel;
+    }
+}
+'''
+
+'''
+// TaskListView.xaml.cs
 using MyToDo.ViewModels;
 
 namespace MyToDo.Views;
@@ -830,8 +903,9 @@ public partial class TaskListView : ContentPage
         }
     }
 }
-===========
+'''
 
+'''
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -923,8 +997,96 @@ public partial class TaskListView : ContentPage
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>
-===========
+'''
 
+'''
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
+             xmlns:model="clr-namespace:MyToDo.Models"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
+             x:Class="MyToDo.Views.EditTaskView"
+             Title="Edit Task">
+    <ScrollView>
+        <VerticalStackLayout Padding="20"
+                             Spacing="10">
+            <Label Text="Description:" />
+            <Editor Text="{Binding Task.Description}"
+                    AutoSize="TextChanges" />
+
+            <Label Text="Due Date:" />
+            <DatePicker Date="{Binding Task.DueDate}" />
+
+            <Label Text="Priority:" />
+            <Picker SelectedItem="{Binding Task.Priority}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>High</x:String>
+                        <x:String>Medium</x:String>
+                        <x:String>Low</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Category:" />
+            <Picker SelectedItem="{Binding Task.Category}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>1st Circle Visits</x:String>
+                        <x:String>2nd Circle Visits</x:String>
+                        <x:String>Health</x:String>
+                        <x:String>Work</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Recurrence Type:" />
+            <Picker SelectedItem="{Binding Task.Recurrence.Type}">
+                <Picker.ItemsSource>
+                    <x:Array Type="{x:Type x:String}">
+                        <x:String>None</x:String>
+                        <x:String>Daily</x:String>
+                        <x:String>Weekly</x:String>
+                        <x:String>Monthly</x:String>
+                    </x:Array>
+                </Picker.ItemsSource>
+            </Picker>
+
+            <Label Text="Recurrence Interval:" />
+            <Entry Text="{Binding Task.Recurrence.Interval, Converter={StaticResource StringToIntConverter}}"
+                   Keyboard="Numeric" />
+
+
+            <!-- Subtasks Section -->
+            <Label Text="Subtasks:" />
+            <CollectionView ItemsSource="{Binding Subtasks}">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:Subtask">
+                        <Grid ColumnDefinitions="Auto, *, Auto">
+                            <CheckBox IsChecked="{Binding IsCompleted}" />
+                            <Entry Grid.Column="1"
+                                   Text="{Binding Description}"
+                                   Placeholder="Subtask description" />
+                            <Button Grid.Column="2"
+                                    Text="-"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:EditTaskViewModel}}, Path=RemoveSubtaskCommand}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+            <Button Text="+"
+                    Command="{Binding AddSubtaskCommand}" />
+
+            <Button Text="Save Changes"
+                    Command="{Binding SaveChangesCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
+'''
+
+'''
 <?xml version="1.0" encoding="utf-8" ?>
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
@@ -1145,5 +1307,5 @@ public partial class TaskListView : ContentPage
         </Grid>
     </Grid>
 </ContentPage>
-===========
+'''
 

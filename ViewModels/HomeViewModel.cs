@@ -2,177 +2,151 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
+using MyToDo.Data.Remote;
 using MyToDo.Models;
 using MyToDo.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.Threading.Tasks;
 using System.Text.Json;
-using System;
-using System.Windows.Input;
-using MyToDo.Data.Remote;
 
-namespace MyToDo.ViewModels
+namespace MyToDo.ViewModels;
+
+public partial class HomeViewModel : ObservableObject
 {
-    public partial class HomeViewModel : ObservableObject
+    [ObservableProperty]
+    private ObservableCollection<TaskModel> _tasks = new();
+
+    [ObservableProperty]
+    private bool _isBusy;
+
+    [ObservableProperty]
+    private string _errorMessage;
+
+    private readonly DatabaseContext _databaseContext;
+    private readonly FirebaseService _firebaseService;  // Keep this if you plan to use Firebase
+    private bool _isLoaded = false;
+
+    public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
     {
-        [ObservableProperty]
-        private ObservableCollection<TaskModel> _tasks = new();
+        _databaseContext = databaseContext;
+        _firebaseService = firebaseService; // Keep this if you plan to use Firebase
+    }
 
-        [ObservableProperty]
-        private bool _isBusy;
+    public async Task LoadTasksAsync()
+    {
+        if (_isLoaded) return;
 
-        [ObservableProperty]
-        private string _errorMessage;
+        IsBusy = true;
+        _isLoaded = true;
+        ErrorMessage = null;
 
-        // Drag and drop commands
-        public ICommand DragStartingCommand { get; }
-        public ICommand DropOverCommand { get; }
-        public ICommand DropCommand { get; }
-
-        private readonly DatabaseContext _databaseContext;
-        private readonly FirebaseService _firebaseService;
-        private bool _isLoaded = false;
-
-        public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
+        try
         {
-            _databaseContext = databaseContext;
-            _firebaseService = firebaseService;
-            // Initialize the commands
-            DragStartingCommand = new Command<TaskModel>(OnDragStarting);
-            DropOverCommand = new Command<TaskModel>(OnDropOver);
-            DropCommand = new Command<TaskModel>(OnDrop);
-        }
+            Tasks.Clear();
+            var loadedTasks = await _databaseContext.GetAllTasksAsync();
 
-        // ... (LoadTasksAsync, ResetIsLoaded, AddTask, GoToEditTask, DeleteTask - as before) ...
-        public async Task LoadTasksAsync()
-        {
-            if (_isLoaded) return;
-
-            IsBusy = true;
-            _isLoaded = true;
-            ErrorMessage = null;
-
-            try
+            foreach (var task in loadedTasks)
             {
-                Tasks.Clear();
-                var loadedTasks = await _databaseContext.GetAllTasksAsync();
-
-                foreach (var task in loadedTasks)
+                if (!string.IsNullOrEmpty(task.SubtasksJson))
                 {
-                    if (!string.IsNullOrEmpty(task.SubtasksJson))
+                    try
                     {
-                        try
-                        {
-                            task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
-                        }
-                        catch (JsonException)
-                        {
-                            task.Subtasks = new List<Subtask>();
-                            Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
-                        }
+                        task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
                     }
-                    Tasks.Add(task);
+                    catch (JsonException)
+                    {
+                        task.Subtasks = new List<Subtask>();
+                        Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Failed to load tasks: {ex.Message}";
-                Debug.WriteLine($"---> Error loading tasks: {ex}");
-                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
-            }
-            finally
-            {
-                IsBusy = false;
+                Tasks.Add(task);
             }
         }
-
-        public void ResetIsLoaded()
+        catch (Exception ex)
         {
-            _isLoaded = false;
+            ErrorMessage = $"Failed to load tasks: {ex.Message}";
+            Debug.WriteLine($"---> Error loading tasks: {ex}");
+            await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
         }
-
-        [RelayCommand]
-        private async Task AddTask()
+        finally
         {
-            ErrorMessage = null;
-            var addTaskViewModel = new AddTaskViewModel(_databaseContext);
-            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
-            {
-                {nameof(AddTaskViewModel), addTaskViewModel }
-            });
+            IsBusy = false;
         }
+    }
 
-        [RelayCommand]
-        private async Task GoToEditTask(TaskModel task)
+    public void ResetIsLoaded()
+    {
+        _isLoaded = false;
+    }
+
+    [RelayCommand]
+    private async Task AddTask()
+    {
+        ErrorMessage = null;
+        await Shell.Current.GoToAsync(nameof(AddTaskView)); // No need to pass the ViewModel
+    }
+
+    [RelayCommand]
+    private async Task GoToEditTask(TaskModel task)
+    {
+        if (task == null) return;
+        ErrorMessage = null;
+
+        // Use query parameters to pass the task ID
+        await Shell.Current.GoToAsync($"{nameof(EditTaskView)}?taskId={task.Id}");
+    }
+
+    [RelayCommand]
+    private async Task DeleteTask(TaskModel task)
+    {
+        if (task == null) return;
+        ErrorMessage = null;
+        try
         {
-            if (task == null) return;
-            ErrorMessage = null;
-
-            // Create the AddTaskViewModel with the task to edit.
-            var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
-
-            // Pass the ViewModel in the navigation parameters.
-            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
-            {
-                { nameof(AddTaskViewModel), addTaskViewModel }
-            });
+            await _databaseContext.DeleteTaskAsync(task);
+            Tasks.Remove(task);
         }
-
-        [RelayCommand]
-        private async Task DeleteTask(TaskModel task)
+        catch (Exception ex)
         {
-            if (task == null) return;
-            ErrorMessage = null;
-            try
-            {
-                await _databaseContext.DeleteTaskAsync(task);
-                Tasks.Remove(task);
-            }
-            catch (Exception ex)
-            {
-                ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
-                Debug.WriteLine($"---> Error Deleting tasks: {ex}");
-                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
-            }
-
+            ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
+            Debug.WriteLine($"---> Error Deleting tasks: {ex}");
+            await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
         }
-        private TaskModel _draggedTask; // Store the task being dragged
+    }
 
-        private void OnDragStarting(TaskModel task)
+    private TaskModel _draggedTask;
+
+    [RelayCommand]
+    private void DragStarting(TaskModel task)
+    {
+        _draggedTask = task;
+    }
+
+    [RelayCommand]
+    private void DropOver(TaskModel task)
+    {
+        // Could add visual feedback here (e.g., highlighting the drop target)
+    }
+
+    [RelayCommand]
+    private void Drop(TaskModel dropTask)
+    {
+        if (_draggedTask == null || dropTask == null || ReferenceEquals(_draggedTask, dropTask))
         {
-            _draggedTask = task;
+            return;
         }
 
-        private void OnDropOver(TaskModel task)
+        int dragIndex = Tasks.IndexOf(_draggedTask);
+        int dropIndex = Tasks.IndexOf(dropTask);
+
+        if (dragIndex == -1 || dropIndex == -1)
         {
-            // Could add visual feedback here (e.g., highlighting the drop target)
+            return;
         }
 
-        private void OnDrop(TaskModel dropTask)
-        {
-            if (_draggedTask == null || dropTask == null)
-            {
-                return;
-            }
+        Tasks.RemoveAt(dragIndex);
+        Tasks.Insert(dropIndex, _draggedTask);
 
-            if (ReferenceEquals(_draggedTask, dropTask))
-            {
-                return; // Dropped on itself
-            }
-
-            int dragIndex = Tasks.IndexOf(_draggedTask);
-            int dropIndex = Tasks.IndexOf(dropTask);
-
-            if (dragIndex == -1 || dropIndex == -1)
-            {
-                return;
-            }
-
-            Tasks.RemoveAt(dragIndex);
-            Tasks.Insert(dropIndex, _draggedTask);
-
-            _draggedTask = null;
-        }
+        _draggedTask = null;
     }
 }

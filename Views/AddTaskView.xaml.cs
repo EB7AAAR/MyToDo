@@ -12,7 +12,7 @@ public partial class AddTaskView : ContentPage
         BindingContext = viewModel;
     }
 
-    protected override async void OnAppearing() // Make this async void
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
 

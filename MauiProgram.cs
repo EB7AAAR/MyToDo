@@ -1,6 +1,7 @@
 ﻿using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
 using MyToDo.Data.Local;
+using MyToDo.Data.Remote;
 using MyToDo.ViewModels;
 using MyToDo.Views;
 
@@ -19,7 +20,7 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
-
+        builder.Services.AddSingleton<FirebaseService>(); // Add this line
         // Register DatabaseContext
         string dbPath = Path.Combine(FileSystem.AppDataDirectory, "tasks.db3");
         builder.Services.AddSingleton(new DatabaseContext(dbPath));

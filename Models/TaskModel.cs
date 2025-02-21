@@ -23,6 +23,8 @@ namespace MyToDo.Models
         [ObservableProperty]
         private string _category;
 
+        public string FirebaseKey { get; set; }
+
         private RecurrencePattern _recurrence;
 
         [Ignore]

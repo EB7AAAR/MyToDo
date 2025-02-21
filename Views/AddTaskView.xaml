@@ -14,7 +14,8 @@
 
             <Label Text="Description:" />
             <Editor Text="{Binding Description}"
-                    AutoSize="TextChanges" />
+                    AutoSize="TextChanges"
+                    x:Name="DescriptionEditor" />
 
             <Label Text="Due Date:" />
             <DatePicker Date="{Binding DueDate}" />

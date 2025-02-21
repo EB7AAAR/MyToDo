@@ -1,7 +1,4 @@
-﻿// Converters/BoolToOpacityConverter.cs
-using System;
-using System.Globalization;
-using Microsoft.Maui.Controls;
+﻿using System.Globalization;
 
 namespace MyToDo.Converters
 {

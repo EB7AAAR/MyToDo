@@ -1,5 +1,4 @@
-﻿// Models/RecurrencePattern.cs
-namespace MyToDo.Models
+﻿namespace MyToDo.Models
 {
     public class RecurrencePattern
     {

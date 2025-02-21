@@ -1,6 +1,4 @@
-﻿// Converters/StringToBoolConverter.cs
-using System.Globalization;
-using Microsoft.Maui.Controls;
+﻿using System.Globalization;
 
 namespace MyToDo.Converters;
 

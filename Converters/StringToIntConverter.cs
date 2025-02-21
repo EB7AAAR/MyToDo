@@ -1,5 +1,4 @@
-﻿// Converters/StringToBoolConverter.cs
-using System.Globalization;
+﻿using System.Globalization;
 
 namespace MyToDo.Converters;
 

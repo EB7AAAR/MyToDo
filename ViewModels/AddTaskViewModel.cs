@@ -1,10 +1,11 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿// AddTaskViewModel.cs (Full code, with explanations)
+
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
 using MyToDo.Models;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-using System.Diagnostics; // Make sure to include this for Debug.WriteLine
+using System.Text.Json; // Ensure this is present
 
 namespace MyToDo.ViewModels
 {
@@ -32,7 +33,7 @@ namespace MyToDo.ViewModels
         private ObservableCollection<Subtask> _subtasks = new();
 
         private readonly DatabaseContext _databaseContext;
-        private TaskModel _taskToEdit;
+        private TaskModel _taskToEdit; // This holds the task being edited
 
         // Constructor for adding a new task
         public AddTaskViewModel(DatabaseContext databaseContext)
@@ -46,13 +47,15 @@ namespace MyToDo.ViewModels
         public AddTaskViewModel(DatabaseContext databaseContext, TaskModel taskToEdit)
         {
             _databaseContext = databaseContext;
-            _taskToEdit = taskToEdit;
+            _taskToEdit = taskToEdit; // Store the task to be edited
 
+            // Populate the properties with the existing task's data
             Description = taskToEdit.Description;
             DueDate = taskToEdit.DueDate;
             Priority = taskToEdit.Priority;
             Category = taskToEdit.Category;
 
+            // Handle Recurrence (check for null)
             if (taskToEdit.Recurrence != null)
             {
                 RecurrenceType = taskToEdit.Recurrence.Type;
@@ -60,17 +63,23 @@ namespace MyToDo.ViewModels
             }
             else
             {
-                RecurrenceType = "None";
+                RecurrenceType = "None"; // Default if no recurrence
             }
-
-            // IMPORTANT: Load subtasks correctly
-            if (taskToEdit.Subtasks != null)
+            // Deserialize Subtasks from JSON, handle potential errors.
+            if (!string.IsNullOrEmpty(taskToEdit.SubtasksJson))
             {
-                foreach (var sub in taskToEdit.Subtasks)
+                try
                 {
-                    Subtasks.Add(new Subtask { Description = sub.Description, IsCompleted = sub.IsCompleted }); // Create new instances
+                    Subtasks = new ObservableCollection<Subtask>(JsonSerializer.Deserialize<List<Subtask>>(taskToEdit.SubtasksJson));
+                }
+                catch (JsonException)
+                {
+                    // Handle JSON deserialization errors (e.g., log, show error)
+                    Subtasks = new ObservableCollection<Subtask>(); // Reset to empty
                 }
             }
+
+
         }
 
         [RelayCommand]
@@ -88,6 +97,7 @@ namespace MyToDo.ViewModels
         [RelayCommand]
         private async Task SaveTask()
         {
+            // Create the RecurrencePattern object (if needed)
             RecurrencePattern recurrence = null;
             if (RecurrenceType != "None")
             {
@@ -101,10 +111,10 @@ namespace MyToDo.ViewModels
                 _taskToEdit.DueDate = DueDate;
                 _taskToEdit.Priority = Priority;
                 _taskToEdit.Category = Category;
-                _taskToEdit.Recurrence = recurrence; // Correctly assign recurrence
-                _taskToEdit.Subtasks = new List<Subtask>(Subtasks);  //CRUCIAL: Create a *new* list.
+                _taskToEdit.Recurrence = recurrence; // Assign the RecurrencePattern
+                _taskToEdit.SubtasksJson = JsonSerializer.Serialize(Subtasks); // Serialize Subtasks
 
-                await _databaseContext.UpdateTaskAsync(_taskToEdit);
+                await _databaseContext.UpdateTaskAsync(_taskToEdit); // Update in the database
             }
             else
             {
@@ -115,13 +125,14 @@ namespace MyToDo.ViewModels
                     DueDate = DueDate,
                     Priority = Priority,
                     Category = Category,
-                    Recurrence = recurrence, // Correctly assign recurrence
-                    Subtasks = new List<Subtask>(Subtasks) // CRUCIAL: Create a *new* list.
+                    Recurrence = recurrence, // Assign the RecurrencePattern
+                    SubtasksJson = JsonSerializer.Serialize(Subtasks) // Serialize Subtasks
+
                 };
-                await _databaseContext.AddTaskAsync(newTask);
+                await _databaseContext.AddTaskAsync(newTask); // Add to the database
             }
 
-            await Shell.Current.GoToAsync("..");
+            await Shell.Current.GoToAsync(".."); // Navigate back
         }
     }
 }

@@ -1,5 +1,4 @@
-﻿// Models/Subtask.cs
-namespace MyToDo.Models
+﻿namespace MyToDo.Models
 {
     public class Subtask
     {

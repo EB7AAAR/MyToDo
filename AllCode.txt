@@ -29,6 +29,7 @@ public partial class AppShell : Shell
 using CommunityToolkit.Maui;
 using Microsoft.Extensions.Logging;
 using MyToDo.Data.Local;
+using MyToDo.Data.Remote;
 using MyToDo.ViewModels;
 using MyToDo.Views;
 
@@ -47,7 +48,7 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
-
+        builder.Services.AddSingleton<FirebaseService>(); // Add this line
         // Register DatabaseContext
         string dbPath = Path.Combine(FileSystem.AppDataDirectory, "tasks.db3");
         builder.Services.AddSingleton(new DatabaseContext(dbPath));
@@ -105,10 +106,7 @@ public static class MauiProgram
 </Shell>
 ===========
 
-// Converters/BoolToOpacityConverter.cs
-using System;
 using System.Globalization;
-using Microsoft.Maui.Controls;
 
 namespace MyToDo.Converters
 {
@@ -127,9 +125,7 @@ namespace MyToDo.Converters
 }
 ===========
 
-// Converters/StringToBoolConverter.cs
 using System.Globalization;
-using Microsoft.Maui.Controls;
 
 namespace MyToDo.Converters;
 
@@ -152,7 +148,6 @@ public class StringToBoolConverter : IValueConverter
 
 ===========
 
-// Converters/StringToBoolConverter.cs
 using System.Globalization;
 
 namespace MyToDo.Converters;
@@ -179,11 +174,40 @@ public class StringToIntConverter : IValueConverter
 }
 ===========
 
+using System.Globalization;
+namespace MyToDo.Converters;
+
+public class ThemeToColorConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (value is AppTheme theme)
+        {
+            if (theme == AppTheme.Dark)
+            {
+                return (Color)Application.Current.Resources["Gray950"]; // Dark theme color
+            }
+            else
+            {
+                return (Color)Application.Current.Resources["Gray200"]; // Light theme color
+            }
+        }
+        return (Color)Application.Current.Resources["Gray200"]; // Default to light theme
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+    {
+        throw new NotImplementedException(); // Not needed for this scenario
+    }
+}
+===========
+
 using MyToDo.Models;
 using SQLite;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Diagnostics;
+using System; // Ensure this is included
 
 namespace MyToDo.Data.Local
 {
@@ -206,7 +230,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in GetAllTasksAsync: {ex}");
-                return new List<TaskModel>();
+                throw; // Re-throw the exception
             }
         }
 
@@ -219,7 +243,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in AddTaskAsync: {ex}");
-                return -1;
+                throw; // Re-throw the exception
             }
         }
 
@@ -232,7 +256,7 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in UpdateTaskAsync: {ex}");
-                return -1;
+                throw; // Re-throw the exception
             }
         }
 
@@ -245,52 +269,96 @@ namespace MyToDo.Data.Local
             catch (Exception ex)
             {
                 Debug.WriteLine($"---> Error in DeleteTaskAsync: {ex}");
-                return -1;
+                throw; // Re-throw the exception
             }
         }
     }
 }
 ===========
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Firebase.Database;
+using Firebase.Database.Query;
+using MyToDo.Models;
 
 namespace MyToDo.Data.Remote
 {
-    using Firebase.Database;
-    using MyToDo.Models;
-
     public class FirebaseService
     {
         private readonly FirebaseClient _firebase;
 
         public FirebaseService()
         {
+            // **IMPORTANT:** Replace this with secure credential handling!
+            string firebaseDatabaseUrl = "https://mytodo-XXXXX.firebaseio.com/"; //YOUR URL
+            string firebaseSecret = "YOUR_FIREBASE_SECRET"; //YOUR KEY
+
+
             _firebase = new FirebaseClient(
-                "https://mytodo-XXXXX.firebaseio.com/",
-                new FirebaseOptions { AuthTokenAsyncFactory = () => Task.FromResult("YOUR_FIREBASE_SECRET") }
-            );
+                firebaseDatabaseUrl,
+                new FirebaseOptions
+                {
+                    AuthTokenAsyncFactory = () => Task.FromResult(firebaseSecret)
+                });
         }
 
-        public async Task SyncTasksAsync(IEnumerable<TaskModel> tasks)
+        // Add a new task to Firebase
+        public async Task<string> AddTaskAsync(TaskModel task)
         {
-            // Push local tasks to Firebase
-            await _firebase.Child("tasks").PutAsync(tasks);
+            var result = await _firebase
+                .Child("tasks")
+                .PostAsync(task);
+
+            return result.Key; // Returns the unique key generated by Firebase
         }
 
-        // Add methods to fetch remote changes
+        // Get all tasks from Firebase.
+        public async Task<List<TaskModel>> GetAllTasksAsync()
+        {
+            var tasks = await _firebase
+                .Child("tasks")
+                .OnceAsync<TaskModel>();
+
+            // Convert FirebaseObject<TaskModel> to List<TaskModel> and set FirebaseKey
+            return tasks.Select(item =>
+            {
+                item.Object.FirebaseKey = item.Key;  // Store the Firebase key
+                return item.Object;
+            }).ToList();
+        }
+
+        // Update an existing task in Firebase
+        public async Task UpdateTaskAsync(TaskModel task)
+        {
+            if (string.IsNullOrEmpty(task.FirebaseKey))
+            {
+                throw new ArgumentException("Task must have a FirebaseKey to be updated.");
+            }
+
+            await _firebase
+                .Child("tasks")
+                .Child(task.FirebaseKey)
+                .PutAsync(task);
+        }
+
+        // Delete a task from Firebase
+        public async Task DeleteTaskAsync(string firebaseKey)
+        {
+            if (string.IsNullOrEmpty(firebaseKey))
+            {
+                throw new ArgumentException("FirebaseKey must be provided to delete a task.");
+            }
+
+            await _firebase
+                .Child("tasks")
+                .Child(firebaseKey)
+                .DeleteAsync();
+        }
     }
 }
-
 ===========
 
-// Models/BaseEntity.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using SQLite;
-using System;
 
 namespace MyToDo.Models
 {
@@ -304,7 +372,6 @@ namespace MyToDo.Models
 }
 ===========
 
-// Models/RecurrencePattern.cs
 namespace MyToDo.Models
 {
     public class RecurrencePattern
@@ -315,7 +382,6 @@ namespace MyToDo.Models
 }
 ===========
 
-// Models/Subtask.cs
 namespace MyToDo.Models
 {
     public class Subtask
@@ -330,64 +396,46 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using SQLite;
 using System.Collections.Generic;
 using System.Text.Json;
-using System.ComponentModel; // Manually implement INotifyPropertyChanged
+using System;
 
 namespace MyToDo.Models
 {
-    public partial class TaskModel : BaseEntity, INotifyPropertyChanged
+    public partial class TaskModel : BaseEntity
     {
         [ObservableProperty]
         private bool _isDragging;
-        public string Description { get; set; }
-        public DateTime DueDate { get; set; }
-        public string Priority { get; set; }
-        public string Category { get; set; }
-        //public bool IsRecurring { get; set; } Remove the IsRecurring
+
+        [ObservableProperty]
+        private string _description;
+
+        [ObservableProperty]
+        private DateTime _dueDate;
+
+        [ObservableProperty]
+        private string _priority;
+
+        [ObservableProperty]
+        private string _category;
+
+        public string FirebaseKey { get; set; }
 
         private RecurrencePattern _recurrence;
 
         [Ignore]
         public RecurrencePattern Recurrence
         {
-            get { return _recurrence; }
+            get => _recurrence;
             set
             {
-                if (_recurrence != value)
+                if (SetProperty(ref _recurrence, value))
                 {
-                    _recurrence = value;
-                    RecurrenceJson = JsonSerializer.Serialize(_recurrence); // Serialize on set
-                    OnPropertyChanged(nameof(Recurrence)); // Explicitly notify
+                    RecurrenceJson = JsonSerializer.Serialize(_recurrence);
                 }
             }
         }
 
-
+        [ObservableProperty] // This generates a RecurrenceJson property.
         private string _recurrenceJson;
-
-        public string RecurrenceJson
-        {
-            get { return _recurrenceJson; }
-            set
-            {
-                if (_recurrenceJson != value)
-                {
-                    _recurrenceJson = value;
-                    if (!string.IsNullOrEmpty(_recurrenceJson))
-                    {
-                        try
-                        {
-                            Recurrence = JsonSerializer.Deserialize<RecurrencePattern>(_recurrenceJson);
-                        }
-                        catch (JsonException)
-                        {
-                            Recurrence = new RecurrencePattern { Type = "Daily", Interval = 1 };
-                        }
-                    }
-                    OnPropertyChanged(nameof(RecurrenceJson)); // Explicitly notify
-
-                }
-            }
-        }
 
 
         private List<Subtask> _subtasks = new();
@@ -395,62 +443,30 @@ namespace MyToDo.Models
         [Ignore]
         public List<Subtask> Subtasks
         {
-            get { return _subtasks; }
+            get => _subtasks;
             set
             {
-                if (_subtasks != value)
+                if (SetProperty(ref _subtasks, value))
                 {
-                    _subtasks = value;
-                    SubtasksJson = JsonSerializer.Serialize(_subtasks); // Serialize on set
-                    OnPropertyChanged(nameof(Subtasks)); // Explicitly notify
-
+                    SubtasksJson = JsonSerializer.Serialize(_subtasks);
                 }
             }
         }
 
+        [ObservableProperty]
         private string _subtasksJson;
-
-        public string SubtasksJson
-        {
-            get { return _subtasksJson; }
-            set
-            {
-                if (_subtasksJson != value)
-                {
-                    _subtasksJson = value;
-
-                    if (!string.IsNullOrEmpty(_subtasksJson))
-                    {
-                        try
-                        {
-                            Subtasks = JsonSerializer.Deserialize<List<Subtask>>(_subtasksJson);
-                        }
-                        catch (JsonException)
-                        {
-                            Subtasks = new List<Subtask>();
-                        }
-                    }
-                    OnPropertyChanged(nameof(SubtasksJson)); // Explicitly notify
-                }
-            }
-        }
-
-        public event PropertyChangedEventHandler PropertyChanged; // Required by INotifyPropertyChanged
-        protected virtual void OnPropertyChanged(string propertyName)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
     }
 }
 ===========
+
+// AddTaskViewModel.cs (Full code, with explanations)
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
 using MyToDo.Models;
 using System.Collections.ObjectModel;
-using System.Threading.Tasks;
-using System.Diagnostics; // Make sure to include this for Debug.WriteLine
+using System.Text.Json; // Ensure this is present
 
 namespace MyToDo.ViewModels
 {
@@ -478,7 +494,7 @@ namespace MyToDo.ViewModels
         private ObservableCollection<Subtask> _subtasks = new();
 
         private readonly DatabaseContext _databaseContext;
-        private TaskModel _taskToEdit;
+        private TaskModel _taskToEdit; // This holds the task being edited
 
         // Constructor for adding a new task
         public AddTaskViewModel(DatabaseContext databaseContext)
@@ -492,13 +508,15 @@ namespace MyToDo.ViewModels
         public AddTaskViewModel(DatabaseContext databaseContext, TaskModel taskToEdit)
         {
             _databaseContext = databaseContext;
-            _taskToEdit = taskToEdit;
+            _taskToEdit = taskToEdit; // Store the task to be edited
 
+            // Populate the properties with the existing task's data
             Description = taskToEdit.Description;
             DueDate = taskToEdit.DueDate;
             Priority = taskToEdit.Priority;
             Category = taskToEdit.Category;
 
+            // Handle Recurrence (check for null)
             if (taskToEdit.Recurrence != null)
             {
                 RecurrenceType = taskToEdit.Recurrence.Type;
@@ -506,17 +524,23 @@ namespace MyToDo.ViewModels
             }
             else
             {
-                RecurrenceType = "None";
+                RecurrenceType = "None"; // Default if no recurrence
             }
-
-            // IMPORTANT: Load subtasks correctly
-            if (taskToEdit.Subtasks != null)
+            // Deserialize Subtasks from JSON, handle potential errors.
+            if (!string.IsNullOrEmpty(taskToEdit.SubtasksJson))
             {
-                foreach (var sub in taskToEdit.Subtasks)
+                try
                 {
-                    Subtasks.Add(new Subtask { Description = sub.Description, IsCompleted = sub.IsCompleted }); // Create new instances
+                    Subtasks = new ObservableCollection<Subtask>(JsonSerializer.Deserialize<List<Subtask>>(taskToEdit.SubtasksJson));
+                }
+                catch (JsonException)
+                {
+                    // Handle JSON deserialization errors (e.g., log, show error)
+                    Subtasks = new ObservableCollection<Subtask>(); // Reset to empty
                 }
             }
+
+
         }
 
         [RelayCommand]
@@ -534,6 +558,7 @@ namespace MyToDo.ViewModels
         [RelayCommand]
         private async Task SaveTask()
         {
+            // Create the RecurrencePattern object (if needed)
             RecurrencePattern recurrence = null;
             if (RecurrenceType != "None")
             {
@@ -547,10 +572,10 @@ namespace MyToDo.ViewModels
                 _taskToEdit.DueDate = DueDate;
                 _taskToEdit.Priority = Priority;
                 _taskToEdit.Category = Category;
-                _taskToEdit.Recurrence = recurrence; // Correctly assign recurrence
-                _taskToEdit.Subtasks = new List<Subtask>(Subtasks);  //CRUCIAL: Create a *new* list.
+                _taskToEdit.Recurrence = recurrence; // Assign the RecurrencePattern
+                _taskToEdit.SubtasksJson = JsonSerializer.Serialize(Subtasks); // Serialize Subtasks
 
-                await _databaseContext.UpdateTaskAsync(_taskToEdit);
+                await _databaseContext.UpdateTaskAsync(_taskToEdit); // Update in the database
             }
             else
             {
@@ -561,18 +586,20 @@ namespace MyToDo.ViewModels
                     DueDate = DueDate,
                     Priority = Priority,
                     Category = Category,
-                    Recurrence = recurrence, // Correctly assign recurrence
-                    Subtasks = new List<Subtask>(Subtasks) // CRUCIAL: Create a *new* list.
+                    Recurrence = recurrence, // Assign the RecurrencePattern
+                    SubtasksJson = JsonSerializer.Serialize(Subtasks) // Serialize Subtasks
+
                 };
-                await _databaseContext.AddTaskAsync(newTask);
+                await _databaseContext.AddTaskAsync(newTask); // Add to the database
             }
 
-            await Shell.Current.GoToAsync("..");
+            await Shell.Current.GoToAsync(".."); // Navigate back
         }
     }
 }
 ===========
 
+// ViewModels/HomeViewModel.cs
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
@@ -581,6 +608,10 @@ using MyToDo.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using System.Text.Json;
+using System;
+using System.Windows.Input;
+using MyToDo.Data.Remote;
 
 namespace MyToDo.ViewModels
 {
@@ -589,35 +620,74 @@ namespace MyToDo.ViewModels
         [ObservableProperty]
         private ObservableCollection<TaskModel> _tasks = new();
 
-        private readonly DatabaseContext _databaseContext;
-        private bool _isLoaded = false; // Flag to prevent initial double loading
+        [ObservableProperty]
+        private bool _isBusy;
 
-        public HomeViewModel(DatabaseContext databaseContext)
+        [ObservableProperty]
+        private string _errorMessage;
+
+        // Drag and drop commands
+        public ICommand DragStartingCommand { get; }
+        public ICommand DropOverCommand { get; }
+        public ICommand DropCommand { get; }
+
+        private readonly DatabaseContext _databaseContext;
+        private readonly FirebaseService _firebaseService;
+        private bool _isLoaded = false;
+
+        public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
         {
             _databaseContext = databaseContext;
+            _firebaseService = firebaseService;
+            // Initialize the commands
+            DragStartingCommand = new Command<TaskModel>(OnDragStarting);
+            DropOverCommand = new Command<TaskModel>(OnDropOver);
+            DropCommand = new Command<TaskModel>(OnDrop);
         }
 
-        // Call this method to refresh the task list.
+        // ... (LoadTasksAsync, ResetIsLoaded, AddTask, GoToEditTask, DeleteTask - as before) ...
         public async Task LoadTasksAsync()
         {
-            if (_isLoaded) return; // Prevent double loading ON STARTUP
+            if (_isLoaded) return;
 
-            Debug.WriteLine("---> LoadTasksAsync called");
+            IsBusy = true;
+            _isLoaded = true;
+            ErrorMessage = null;
 
-            _isLoaded = true; // Set the flag - but ONLY on initial load
-            Tasks.Clear();
-            var loadedTasks = await _databaseContext.GetAllTasksAsync();
-
-            Debug.WriteLine($"---> Loaded {loadedTasks.Count} tasks from database");
-
-            foreach (var task in loadedTasks)
+            try
             {
-                Debug.WriteLine($"---> Task: {task.Description}, Due: {task.DueDate}"); // Show Description
-                Tasks.Add(task);
+                Tasks.Clear();
+                var loadedTasks = await _databaseContext.GetAllTasksAsync();
+
+                foreach (var task in loadedTasks)
+                {
+                    if (!string.IsNullOrEmpty(task.SubtasksJson))
+                    {
+                        try
+                        {
+                            task.Subtasks = JsonSerializer.Deserialize<List<Subtask>>(task.SubtasksJson);
+                        }
+                        catch (JsonException)
+                        {
+                            task.Subtasks = new List<Subtask>();
+                            Debug.WriteLine($"---> Error deserializing subtasks for task ID {task.Id}");
+                        }
+                    }
+                    Tasks.Add(task);
+                }
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to load tasks: {ex.Message}";
+                Debug.WriteLine($"---> Error loading tasks: {ex}");
+                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
+            }
+            finally
+            {
+                IsBusy = false;
             }
         }
 
-        // IMPORTANT: Add this method to reset the flag
         public void ResetIsLoaded()
         {
             _isLoaded = false;
@@ -626,6 +696,7 @@ namespace MyToDo.ViewModels
         [RelayCommand]
         private async Task AddTask()
         {
+            ErrorMessage = null;
             var addTaskViewModel = new AddTaskViewModel(_databaseContext);
             await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
             {
@@ -637,28 +708,80 @@ namespace MyToDo.ViewModels
         private async Task GoToEditTask(TaskModel task)
         {
             if (task == null) return;
+            ErrorMessage = null;
 
+            // Create the AddTaskViewModel with the task to edit.
             var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
-            await Shell.Current.GoToAsync($"{nameof(AddTaskView)}?id={task.Id}",
-               new Dictionary<string, object>
-               {
-                    {nameof(AddTaskViewModel), addTaskViewModel }
-               });
+
+            // Pass the ViewModel in the navigation parameters.
+            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
+            {
+                { nameof(AddTaskViewModel), addTaskViewModel }
+            });
         }
 
         [RelayCommand]
         private async Task DeleteTask(TaskModel task)
         {
             if (task == null) return;
+            ErrorMessage = null;
+            try
+            {
+                await _databaseContext.DeleteTaskAsync(task);
+                Tasks.Remove(task);
+            }
+            catch (Exception ex)
+            {
+                ErrorMessage = $"Failed to Delete tasks: {ex.Message}";
+                Debug.WriteLine($"---> Error Deleting tasks: {ex}");
+                await Shell.Current.DisplayAlert("Error", ErrorMessage, "OK");
+            }
 
-            await _databaseContext.DeleteTaskAsync(task);
-            Tasks.Remove(task); // Remove from the observable collection too
+        }
+        private TaskModel _draggedTask; // Store the task being dragged
+
+        private void OnDragStarting(TaskModel task)
+        {
+            _draggedTask = task;
+        }
+
+        private void OnDropOver(TaskModel task)
+        {
+            // Could add visual feedback here (e.g., highlighting the drop target)
+        }
+
+        private void OnDrop(TaskModel dropTask)
+        {
+            if (_draggedTask == null || dropTask == null)
+            {
+                return;
+            }
+
+            if (ReferenceEquals(_draggedTask, dropTask))
+            {
+                return; // Dropped on itself
+            }
+
+            int dragIndex = Tasks.IndexOf(_draggedTask);
+            int dropIndex = Tasks.IndexOf(dropTask);
+
+            if (dragIndex == -1 || dropIndex == -1)
+            {
+                return;
+            }
+
+            Tasks.RemoveAt(dragIndex);
+            Tasks.Insert(dropIndex, _draggedTask);
+
+            _draggedTask = null;
         }
     }
 }
 ===========
 
+// AddTaskView.xaml.cs
 using MyToDo.ViewModels;
+using System.Threading.Tasks; // Make sure this is included
 
 namespace MyToDo.Views;
 
@@ -668,6 +791,18 @@ public partial class AddTaskView : ContentPage
     {
         InitializeComponent();
         BindingContext = viewModel;
+    }
+
+    protected override async void OnAppearing() // Make this async void
+    {
+        base.OnAppearing();
+
+        if (this.FindByName("DescriptionEditor") is Editor descriptionEditor)
+        {
+            // Add a short delay before focusing.  This is the key!
+            await Task.Delay(100); // Delay for 100 milliseconds
+            descriptionEditor.Focus();
+        }
     }
 }
 ===========
@@ -713,7 +848,8 @@ public partial class TaskListView : ContentPage
 
             <Label Text="Description:" />
             <Editor Text="{Binding Description}"
-                    AutoSize="TextChanges" />
+                    AutoSize="TextChanges"
+                    x:Name="DescriptionEditor" />
 
             <Label Text="Due Date:" />
             <DatePicker Date="{Binding DueDate}" />
@@ -795,123 +931,218 @@ public partial class TaskListView : ContentPage
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
              xmlns:model="clr-namespace:MyToDo.Models"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
              x:Class="MyToDo.Views.TaskListView"
              Title="My Tasks">
 
-    <Grid RowDefinitions="Auto, *">
-        <!-- Define rows for the Grid: Auto for button, * for CollectionView -->
+    <ContentPage.Resources>
+        <ResourceDictionary>
+            <toolkit:InvertedBoolConverter x:Key="BoolNegationConverter" />
+            <converters:ThemeToColorConverter x:Key="ThemeToColorConverter" />
+            <Style TargetType="Frame">
+                <Setter Property="HasShadow"
+                        Value="True" />
+                <Setter Property="BorderColor">
+                    <Setter.Value>
+                        <Binding Source="{x:Static Application.Current}"
+                                 Path="RequestedTheme"
+                                 Converter="{StaticResource ThemeToColorConverter}" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="CornerRadius"
+                        Value="8" />
+                <Setter Property="Margin"
+                        Value="10,5,10,5" />
+            </Style>
+        </ResourceDictionary>
+    </ContentPage.Resources>
 
+    <Grid RowDefinitions="Auto, *">
         <Button Text="Add Task"
-                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=AddTaskCommand}"
+                Command="{Binding AddTaskCommand}"
                 Margin="10"
                 Grid.Row="0" />
-        <!-- Place the button in the first row (row 0) -->
 
-        <CollectionView ItemsSource="{Binding Tasks}"
-                        Grid.Row="1">
-            <!-- Place the CollectionView in the second row (row 1) -->
-            <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="model:TaskModel">
-                    <Frame Padding="10"
-                           BackgroundColor="{StaticResource Primary}"
-                           Opacity="{Binding IsDragging, Converter={StaticResource BoolToOpacityConverter}}">
+        <Grid Grid.Row="1">
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
 
-                        <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto, Auto, Auto"
-                              ColumnDefinitions="*, Auto">
+            <CollectionView ItemsSource="{Binding Tasks}"
+                            IsVisible="{Binding IsBusy, Converter={StaticResource BoolNegationConverter}}">
 
-                            <!-- Row 0: Description -->
-                            <Label Text="{Binding Description}"
-                                   FontSize="18"
-                                   FontAttributes="Bold"
-                                   TextColor="White"
-                                   Grid.Row="0"
-                                   Grid.Column="0"
-                                   Grid.ColumnSpan="2" />
+                <CollectionView.EmptyView>
+                    <StackLayout Padding="20"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center">
+                        <Label Text="No tasks yet.  Tap 'Add Task' to create one."
+                               HorizontalTextAlignment="Center" />
+                    </StackLayout>
+                </CollectionView.EmptyView>
 
-                            <!-- Row 1: Due Date -->
-                            <Label Text="{Binding DueDate, StringFormat='Due: {0:g}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="1"
-                                   Grid.Column="0" />
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:TaskModel">
+                        <Frame Padding="0">
+                            <toolkit:Expander>
+                                <toolkit:Expander.Header>
+                                    <Grid ColumnDefinitions="*, Auto, Auto"
+                                          Padding="10"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
+                                        <!-- DragGestureRecognizer is now on the Header's Grid -->
+                                        <Grid.GestureRecognizers>
+                                            <DragGestureRecognizer DragStartingCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DragStartingCommand}"
+                                                                   DragStartingCommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
+                                        <Label Text="{Binding Description}"
+                                               FontSize="18"
+                                               FontAttributes="Bold"
+                                               TextColor="{AppThemeBinding Light=White, Dark={StaticResource PrimaryDarkText}}"
+                                               VerticalOptions="Center" />
+                                        <Label Text="{Binding DueDate, StringFormat='{0:M/d}'}"
+                                               FontSize="14"
+                                               TextColor="{AppThemeBinding Light=White, Dark={StaticResource PrimaryDarkText}}"
+                                               Grid.Column="1"
+                                               VerticalOptions="Center" />
+                                        <Image Source="expand_more.png"
+                                               Grid.Column="2"
+                                               HeightRequest="20"
+                                               WidthRequest="20">
+                                            <Image.Triggers>
+                                                <DataTrigger TargetType="Image"
+                                                             Binding="{Binding Source={RelativeSource AncestorType={x:Type toolkit:Expander}}, Path=IsExpanded}"
+                                                             Value="True">
+                                                    <Setter Property="Source"
+                                                            Value="expand_less.png" />
+                                                </DataTrigger>
+                                            </Image.Triggers>
+                                        </Image>
+                                    </Grid>
+                                </toolkit:Expander.Header>
 
-                            <!-- Row 2: Category -->
-                            <Label Text="{Binding Category, StringFormat='Category: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="2"
-                                   Grid.Column="0" />
+                                <toolkit:Expander.Content>
+                                    <Grid RowDefinitions="Auto, Auto, Auto"
+                                          ColumnDefinitions="*, Auto, Auto"
+                                          Padding="10"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray600}}">
+                                        <!--Changed Row and Column Definitions-->
 
-                            <!-- Row 3: Priority -->
-                            <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="3"
-                                   Grid.Column="0" />
 
-                            <!-- Row 4: Recurrence -->
-                            <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="4"
-                                   Grid.Column="0" />
-                            <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
-                                   IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
-                                   FontSize="14"
-                                   TextColor="White"
-                                   Grid.Row="4"
-                                   Grid.Column="1" />
+                                        <!-- Subtasks Section -->
+                                        <CollectionView ItemsSource="{Binding Subtasks}"
+                                                        Grid.Row="0"
+                                                        Grid.ColumnSpan="3"
+                                                        Margin="0">
+                                            <!-- Reduced margin -->
+                                            <CollectionView.ItemTemplate>
+                                                <DataTemplate x:DataType="model:Subtask">
+                                                    <Grid ColumnDefinitions="Auto, *"
+                                                          Padding="0"
+                                                          RowSpacing="0">
+                                                        <!-- Reduced padding -->
+                                                        <CheckBox IsChecked="{Binding IsCompleted}"
+                                                                  VerticalOptions="Center"
+                                                                  Margin="0" />
+                                                        <!-- Removed extra margin -->
+                                                        <Label Text="{Binding Description}"
+                                                               Grid.Column="1"
+                                                               VerticalOptions="Center"
+                                                               TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </CollectionView.ItemTemplate>
+                                        </CollectionView>
 
-                            <!-- Row 5: Subtasks (Nested CollectionView) -->
-                            <CollectionView ItemsSource="{Binding Subtasks}"
-                                            Grid.Row="5"
-                                            Grid.Column="0"
-                                            Grid.ColumnSpan="2"
-                                            Margin="10,0,0,0">
-                                <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="model:Subtask">
-                                        <Grid ColumnDefinitions="Auto, *">
-                                            <CheckBox IsChecked="{Binding IsCompleted}"
-                                                      VerticalOptions="Center" />
-                                            <Label Text="{Binding Description}"
-                                                   Grid.Column="1"
-                                                   VerticalOptions="Center"
-                                                   TextColor="White" />
-                                        </Grid>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
+                                        <!-- Task Details -->
+                                        <VerticalStackLayout Grid.Row="1"
+                                                             Grid.Column="0"
+                                                             Grid.ColumnSpan="2"
+                                                             Margin="10,0,0,0"
+                                                             Spacing="5">
+                                            <!--Wrapping Labels in StackLayouts. -->
+                                            <Label Text="{Binding Category, StringFormat='Category: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
 
-                            <!-- Row 6: Delete Button and creation date-->
-                            <Label Text="{Binding CreatedDate, StringFormat='Created: {0:g}'}"
-                                   FontSize="12"
-                                   TextColor="White"
-                                   Grid.Row="6"
-                                   Grid.Column="0" />
-                            <Button Text="X"
-                                    Grid.Row="6"
-                                    Grid.Column="1"
-                                    BackgroundColor="Red"
-                                    TextColor="White"
-                                    Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
-                                    CommandParameter="{Binding}"
-                                    Padding="5,0"
-                                    HorizontalOptions="End" />
+                                            <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
 
-                            <!-- Gestures -->
-                            <Grid.GestureRecognizers>
-                                <DragGestureRecognizer DragStartingCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DragStartingCommand}"
-                                                       DragStartingCommandParameter="{Binding}" />
-                                <DropGestureRecognizer DropCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropCompletedCommand}"
-                                                       DropCommandParameter="{Binding}" />
-                                <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
-                                                      CommandParameter="{Binding}" />
-                            </Grid.GestureRecognizers>
-                        </Grid>
-                    </Frame>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                                            <Label Text="{Binding CreatedDate, StringFormat='Created: {0:M/d/yyyy}'}"
+                                                   FontSize="12"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                            <!--For Row 3: Recurrence-->
+                                            <!--
+                                        <StackLayout Orientation="Horizontal">
+                                            
+                                            <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                            <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
+                                                   IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                        </StackLayout>
+                                        -->
+
+
+                                        </VerticalStackLayout>
+                                        <HorizontalStackLayout Grid.Row="1"
+                                                               Grid.Column="2"
+                                                               Spacing="10">
+                                            <!-- Edit Button -->
+                                            <Border Stroke="Black"
+                                                    StrokeThickness="2"
+                                                    Padding="5,0"
+                                                    HeightRequest="50"
+                                                    WidthRequest="50"
+                                                    VerticalOptions="End"
+                                                    HorizontalOptions="End">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <ImageButton Source="edit.png"
+                                                             Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
+                                                             CommandParameter="{Binding .}"
+                                                             BackgroundColor="Transparent" />
+                                            </Border>
+                                            <!-- Smaller FontSize -->
+                                            <!-- Delete Button -->
+                                            <Border Stroke="Black"
+                                                    StrokeThickness="2"
+                                                    HeightRequest="50"
+                                                    WidthRequest="50"
+                                                    Padding="5,0"
+                                                    VerticalOptions="End"
+                                                    HorizontalOptions="End">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <ImageButton Source="delete.png"
+                                                             Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
+                                                             CommandParameter="{Binding}"
+                                                             BackgroundColor="Transparent" />
+                                            </Border>
+                                            <!-- Smaller FontSize -->
+                                        </HorizontalStackLayout>
+
+                                    </Grid>
+                                </toolkit:Expander.Content>
+                            </toolkit:Expander>
+                            <!-- DropGestureRecognizer remains on the Frame -->
+                            <Frame.GestureRecognizers>
+                                <DropGestureRecognizer AllowDrop="True"
+                                                       DropCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropCommand}"
+                                                       DropCommandParameter="{Binding .}"
+                                                       DragOverCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropOverCommand}"
+                                                       DragOverCommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+                        </Frame>
+
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
     </Grid>
 </ContentPage>
 ===========

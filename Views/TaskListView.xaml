@@ -4,15 +4,31 @@
              xmlns:toolkit="http://schemas.microsoft.com/dotnet/2022/maui/toolkit"
              xmlns:viewmodel="clr-namespace:MyToDo.ViewModels"
              xmlns:model="clr-namespace:MyToDo.Models"
+             xmlns:converters="clr-namespace:MyToDo.Converters"
              x:Class="MyToDo.Views.TaskListView"
              Title="My Tasks">
 
     <ContentPage.Resources>
         <ResourceDictionary>
             <toolkit:InvertedBoolConverter x:Key="BoolNegationConverter" />
+            <converters:ThemeToColorConverter x:Key="ThemeToColorConverter" />
+            <Style TargetType="Frame">
+                <Setter Property="HasShadow"
+                        Value="True" />
+                <Setter Property="BorderColor">
+                    <Setter.Value>
+                        <Binding Source="{x:Static Application.Current}"
+                                 Path="RequestedTheme"
+                                 Converter="{StaticResource ThemeToColorConverter}" />
+                    </Setter.Value>
+                </Setter>
+                <Setter Property="CornerRadius"
+                        Value="8" />
+                <Setter Property="Margin"
+                        Value="10,5,10,5" />
+            </Style>
         </ResourceDictionary>
     </ContentPage.Resources>
-
 
     <Grid RowDefinitions="Auto, *">
         <Button Text="Add Task"
@@ -20,44 +36,47 @@
                 Margin="10"
                 Grid.Row="0" />
 
-        <RefreshView Grid.Row="1"
-                     Command="{Binding RefreshTasksCommand}"
-                     IsRefreshing="{Binding IsRefreshing}">
-            <Grid>
-                <ActivityIndicator IsRunning="{Binding IsBusy}"
-                                   IsVisible="{Binding IsBusy}"
-                                   HorizontalOptions="Center"
-                                   VerticalOptions="Center" />
-                <CollectionView ItemsSource="{Binding Tasks}"
-                                IsVisible="{Binding IsBusy, Converter={StaticResource BoolNegationConverter}}">
+        <Grid Grid.Row="1">
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               HorizontalOptions="Center"
+                               VerticalOptions="Center" />
 
-                    <CollectionView.EmptyView>
-                        <StackLayout Padding="20"
-                                     HorizontalOptions="Center"
-                                     VerticalOptions="Center">
-                            <Label Text="No tasks yet.  Tap 'Add Task' to create one."
-                                   HorizontalTextAlignment="Center" />
-                        </StackLayout>
-                    </CollectionView.EmptyView>
+            <CollectionView ItemsSource="{Binding Tasks}"
+                            IsVisible="{Binding IsBusy, Converter={StaticResource BoolNegationConverter}}">
 
-                    <CollectionView.ItemTemplate>
-                        <DataTemplate x:DataType="model:TaskModel">
+                <CollectionView.EmptyView>
+                    <StackLayout Padding="20"
+                                 HorizontalOptions="Center"
+                                 VerticalOptions="Center">
+                        <Label Text="No tasks yet.  Tap 'Add Task' to create one."
+                               HorizontalTextAlignment="Center" />
+                    </StackLayout>
+                </CollectionView.EmptyView>
+
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="model:TaskModel">
+                        <Frame Padding="0">
                             <toolkit:Expander>
                                 <toolkit:Expander.Header>
                                     <Grid ColumnDefinitions="*, Auto, Auto"
                                           Padding="10"
-                                          BackgroundColor="{StaticResource Primary}">
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Primary}, Dark={StaticResource PrimaryDark}}">
+                                        <!-- DragGestureRecognizer is now on the Header's Grid -->
+                                        <Grid.GestureRecognizers>
+                                            <DragGestureRecognizer DragStartingCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DragStartingCommand}"
+                                                                   DragStartingCommandParameter="{Binding .}" />
+                                        </Grid.GestureRecognizers>
                                         <Label Text="{Binding Description}"
                                                FontSize="18"
                                                FontAttributes="Bold"
-                                               TextColor="White"
+                                               TextColor="{AppThemeBinding Light=White, Dark={StaticResource PrimaryDarkText}}"
                                                VerticalOptions="Center" />
                                         <Label Text="{Binding DueDate, StringFormat='{0:M/d}'}"
                                                FontSize="14"
-                                               TextColor="White"
+                                               TextColor="{AppThemeBinding Light=White, Dark={StaticResource PrimaryDarkText}}"
                                                Grid.Column="1"
                                                VerticalOptions="Center" />
-                                        <!-- Expander Icon -->
                                         <Image Source="expand_more.png"
                                                Grid.Column="2"
                                                HeightRequest="20"
@@ -73,85 +92,129 @@
                                         </Image>
                                     </Grid>
                                 </toolkit:Expander.Header>
-                                <toolkit:Expander.Content>
-                                    <Grid RowDefinitions="Auto, Auto, Auto, Auto, Auto"
-                                          ColumnDefinitions="*, Auto"
-                                          Padding="10"
-                                          BackgroundColor="{StaticResource Primary}">
 
-                                        <!-- Subtasks (Nested CollectionView) -->
+                                <toolkit:Expander.Content>
+                                    <Grid RowDefinitions="Auto, Auto, Auto"
+                                          ColumnDefinitions="*, Auto, Auto"
+                                          Padding="10"
+                                          BackgroundColor="{AppThemeBinding Light={StaticResource Secondary}, Dark={StaticResource Gray600}}">
+                                        <!--Changed Row and Column Definitions-->
+
+
+                                        <!-- Subtasks Section -->
                                         <CollectionView ItemsSource="{Binding Subtasks}"
                                                         Grid.Row="0"
-                                                        Grid.ColumnSpan="2"
-                                                        Margin="10,0,0,0">
+                                                        Grid.ColumnSpan="3"
+                                                        Margin="0">
+                                            <!-- Reduced margin -->
                                             <CollectionView.ItemTemplate>
                                                 <DataTemplate x:DataType="model:Subtask">
-                                                    <Grid ColumnDefinitions="Auto, *">
+                                                    <Grid ColumnDefinitions="Auto, *"
+                                                          Padding="0"
+                                                          RowSpacing="0">
+                                                        <!-- Reduced padding -->
                                                         <CheckBox IsChecked="{Binding IsCompleted}"
-                                                                  VerticalOptions="Center" />
+                                                                  VerticalOptions="Center"
+                                                                  Margin="0" />
+                                                        <!-- Removed extra margin -->
                                                         <Label Text="{Binding Description}"
                                                                Grid.Column="1"
                                                                VerticalOptions="Center"
-                                                               TextColor="White" />
+                                                               TextColor="{AppThemeBinding Light=Black, Dark=White}" />
                                                     </Grid>
                                                 </DataTemplate>
                                             </CollectionView.ItemTemplate>
                                         </CollectionView>
-                                        <!-- Category, Priority, Recurrence, etc. -->
-                                        <!-- Row 1: Category -->
-                                        <Label Text="{Binding Category, StringFormat='Category: {0}'}"
-                                               FontSize="14"
-                                               TextColor="White"
-                                               Grid.Row="1"
-                                               Grid.Column="0" />
 
-                                        <!-- Row 2: Priority -->
-                                        <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
-                                               FontSize="14"
-                                               TextColor="White"
-                                               Grid.Row="2"
-                                               Grid.Column="0" />
+                                        <!-- Task Details -->
+                                        <VerticalStackLayout Grid.Row="1"
+                                                             Grid.Column="0"
+                                                             Grid.ColumnSpan="2"
+                                                             Margin="10,0,0,0"
+                                                             Spacing="5">
+                                            <!--Wrapping Labels in StackLayouts. -->
+                                            <Label Text="{Binding Category, StringFormat='Category: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
 
-                                        <!-- Row 3: Recurrence -->
-                                        <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
-                                               FontSize="14"
-                                               TextColor="White"
-                                               Grid.Row="3"
-                                               Grid.Column="0" />
-                                        <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
-                                               IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
-                                               FontSize="14"
-                                               TextColor="White"
-                                               Grid.Row="3"
-                                               Grid.Column="1" />
+                                            <Label Text="{Binding Priority, StringFormat='Priority: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
 
-                                        <!-- Row 4: Delete Button and creation date-->
-                                        <Label Text="{Binding CreatedDate, StringFormat='Created: {0:M/d/yyyy}'}"
-                                               FontSize="12"
-                                               TextColor="White"
-                                               Grid.Row="4"
-                                               Grid.Column="0" />
-                                        <Button Text="X"
-                                                Grid.Row="4"
-                                                Grid.Column="1"
-                                                BackgroundColor="Red"
-                                                TextColor="White"
-                                                Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
-                                                CommandParameter="{Binding}"
-                                                Padding="5,0"
-                                                HorizontalOptions="End" />
-                                        <!-- Gestures -->
-                                        <Grid.GestureRecognizers>
-                                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
-                                                                  CommandParameter="{Binding}" />
-                                        </Grid.GestureRecognizers>
+                                            <Label Text="{Binding CreatedDate, StringFormat='Created: {0:M/d/yyyy}'}"
+                                                   FontSize="12"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                            <!--For Row 3: Recurrence-->
+                                            <!--
+                                        <StackLayout Orientation="Horizontal">
+                                            
+                                            <Label Text="{Binding Recurrence.Type, StringFormat='Recurs: {0}'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                            <Label Text="{Binding Recurrence.Interval, StringFormat='Every: {0}'}"
+                                                   IsVisible="{Binding Recurrence.Type, Converter={StaticResource StringToBoolConverter}, ConverterParameter='None'}"
+                                                   FontSize="14"
+                                                   TextColor="{AppThemeBinding Light=Black, Dark=White}" />
+                                        </StackLayout>
+                                        -->
+
+
+                                        </VerticalStackLayout>
+                                        <HorizontalStackLayout Grid.Row="1"
+                                                               Grid.Column="2"
+                                                               Spacing="10">
+                                            <!-- Edit Button -->
+                                            <Border Stroke="Black"
+                                                    StrokeThickness="2"
+                                                    Padding="5,0"
+                                                    HeightRequest="50"
+                                                    WidthRequest="50"
+                                                    VerticalOptions="End"
+                                                    HorizontalOptions="End">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <ImageButton Source="edit.png"
+                                                             Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=GoToEditTaskCommand}"
+                                                             CommandParameter="{Binding .}"
+                                                             BackgroundColor="Transparent" />
+                                            </Border>
+                                            <!-- Smaller FontSize -->
+                                            <!-- Delete Button -->
+                                            <Border Stroke="Black"
+                                                    StrokeThickness="2"
+                                                    HeightRequest="50"
+                                                    WidthRequest="50"
+                                                    Padding="5,0"
+                                                    VerticalOptions="End"
+                                                    HorizontalOptions="End">
+                                                <Border.StrokeShape>
+                                                    <RoundRectangle CornerRadius="5" />
+                                                </Border.StrokeShape>
+                                                <ImageButton Source="delete.png"
+                                                             Command="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DeleteTaskCommand}"
+                                                             CommandParameter="{Binding}"
+                                                             BackgroundColor="Transparent" />
+                                            </Border>
+                                            <!-- Smaller FontSize -->
+                                        </HorizontalStackLayout>
+
                                     </Grid>
                                 </toolkit:Expander.Content>
                             </toolkit:Expander>
-                        </DataTemplate>
-                    </CollectionView.ItemTemplate>
-                </CollectionView>
-            </Grid>
-        </RefreshView>
+                            <!-- DropGestureRecognizer remains on the Frame -->
+                            <Frame.GestureRecognizers>
+                                <DropGestureRecognizer AllowDrop="True"
+                                                       DropCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropCommand}"
+                                                       DropCommandParameter="{Binding .}"
+                                                       DragOverCommand="{Binding Source={RelativeSource AncestorType={x:Type viewmodel:HomeViewModel}}, Path=DropOverCommand}"
+                                                       DragOverCommandParameter="{Binding .}" />
+                            </Frame.GestureRecognizers>
+                        </Frame>
+
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
     </Grid>
 </ContentPage>

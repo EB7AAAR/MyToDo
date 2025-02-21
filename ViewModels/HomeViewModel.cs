@@ -1,11 +1,16 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+﻿// ViewModels/HomeViewModel.cs
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MyToDo.Data.Local;
 using MyToDo.Models;
 using MyToDo.Views;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using System.Text.Json;
+using System;
+using System.Windows.Input;
+using MyToDo.Data.Remote;
 
 namespace MyToDo.ViewModels
 {
@@ -18,20 +23,28 @@ namespace MyToDo.ViewModels
         private bool _isBusy;
 
         [ObservableProperty]
-        private bool _isRefreshing;
-
-        [ObservableProperty]
         private string _errorMessage;
 
+        // Drag and drop commands
+        public ICommand DragStartingCommand { get; }
+        public ICommand DropOverCommand { get; }
+        public ICommand DropCommand { get; }
 
         private readonly DatabaseContext _databaseContext;
+        private readonly FirebaseService _firebaseService;
         private bool _isLoaded = false;
 
-        public HomeViewModel(DatabaseContext databaseContext)
+        public HomeViewModel(DatabaseContext databaseContext, FirebaseService firebaseService)
         {
             _databaseContext = databaseContext;
+            _firebaseService = firebaseService;
+            // Initialize the commands
+            DragStartingCommand = new Command<TaskModel>(OnDragStarting);
+            DropOverCommand = new Command<TaskModel>(OnDropOver);
+            DropCommand = new Command<TaskModel>(OnDrop);
         }
 
+        // ... (LoadTasksAsync, ResetIsLoaded, AddTask, GoToEditTask, DeleteTask - as before) ...
         public async Task LoadTasksAsync()
         {
             if (_isLoaded) return;
@@ -74,7 +87,6 @@ namespace MyToDo.ViewModels
             }
         }
 
-
         public void ResetIsLoaded()
         {
             _isLoaded = false;
@@ -96,12 +108,15 @@ namespace MyToDo.ViewModels
         {
             if (task == null) return;
             ErrorMessage = null;
+
+            // Create the AddTaskViewModel with the task to edit.
             var addTaskViewModel = new AddTaskViewModel(_databaseContext, task);
-            await Shell.Current.GoToAsync($"{nameof(AddTaskView)}?id={task.Id}",
-               new Dictionary<string, object>
-               {
-                    {nameof(AddTaskViewModel), addTaskViewModel }
-               });
+
+            // Pass the ViewModel in the navigation parameters.
+            await Shell.Current.GoToAsync(nameof(AddTaskView), new Dictionary<string, object>
+            {
+                { nameof(AddTaskViewModel), addTaskViewModel }
+            });
         }
 
         [RelayCommand]
@@ -122,21 +137,42 @@ namespace MyToDo.ViewModels
             }
 
         }
+        private TaskModel _draggedTask; // Store the task being dragged
 
-        [RelayCommand]
-        private async Task RefreshTasks()
+        private void OnDragStarting(TaskModel task)
         {
-            IsRefreshing = true;
-            _isLoaded = false;
-            ErrorMessage = null;
-            try
+            _draggedTask = task;
+        }
+
+        private void OnDropOver(TaskModel task)
+        {
+            // Could add visual feedback here (e.g., highlighting the drop target)
+        }
+
+        private void OnDrop(TaskModel dropTask)
+        {
+            if (_draggedTask == null || dropTask == null)
             {
-                await LoadTasksAsync();
+                return;
             }
-            finally
+
+            if (ReferenceEquals(_draggedTask, dropTask))
             {
-                IsRefreshing = false;
+                return; // Dropped on itself
             }
+
+            int dragIndex = Tasks.IndexOf(_draggedTask);
+            int dropIndex = Tasks.IndexOf(dropTask);
+
+            if (dragIndex == -1 || dropIndex == -1)
+            {
+                return;
+            }
+
+            Tasks.RemoveAt(dragIndex);
+            Tasks.Insert(dropIndex, _draggedTask);
+
+            _draggedTask = null;
         }
     }
 }
